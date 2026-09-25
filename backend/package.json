@@ -1,0 +1,17 @@
+{
+  "name": "bms-provenance-backend",
+  "version": "1.0.0",
+  "description": "Express Backend for Hyperledger Fabric Component Provenance",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@hyperledger/fabric-gateway": "^1.7.0",
+    "@grpc/grpc-js": "^1.12.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

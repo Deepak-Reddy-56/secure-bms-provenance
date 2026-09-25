@@ -176,14 +176,27 @@ export async function getSystemOverview(
   }
 }
 
+import type { FabricHealthResult } from '../types/component';
+
 /**
- * Check the backend/Fabric network health.
+ * Check the backend/Fabric network health via GET /api/health/fabric.
  */
-export async function checkNetworkHealth(signal?: AbortSignal): Promise<boolean> {
+export async function checkFabricHealth(signal?: AbortSignal): Promise<FabricHealthResult> {
   try {
-    await api.get('/api/health', signal);
-    return true;
-  } catch {
-    return false;
+    return await api.get<FabricHealthResult>('/api/health/fabric', signal);
+  } catch (err) {
+    return {
+      connected: false,
+      error: err instanceof Error ? err.message : 'Unable to connect to provenance backend service',
+    };
   }
 }
+
+/**
+ * Legacy boolean check.
+ */
+export async function checkNetworkHealth(signal?: AbortSignal): Promise<boolean> {
+  const result = await checkFabricHealth(signal);
+  return result.connected;
+}
+

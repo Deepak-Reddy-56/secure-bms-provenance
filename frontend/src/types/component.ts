@@ -81,7 +81,23 @@ export type ActionState = 'idle' | 'submitting' | 'success' | 'error';
 
 export type NetworkStatus = 'connected' | 'connecting' | 'disconnected';
 
+export interface FabricHealthResult {
+  connected: boolean;
+  network?: string;
+  chaincode?: string;
+  identity?: string;
+  error?: string;
+  details?: {
+    peer?: string;
+    mspId?: string;
+    orderer?: string;
+    channel?: string;
+    chaincode?: string;
+  };
+}
+
 export interface SystemOverview {
   registeredCount: number | null;
   networkStatus: NetworkStatus;
 }
+

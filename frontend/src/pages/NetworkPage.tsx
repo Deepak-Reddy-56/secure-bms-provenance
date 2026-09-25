@@ -1,13 +1,15 @@
-import type { NetworkStatus } from '../types/component';
+import { useState } from 'react';
+import type { NetworkStatus, FabricHealthResult } from '../types/component';
 
 interface NetworkPageProps {
   networkStatus: NetworkStatus;
+  health: FabricHealthResult | null;
 }
 
 const NETWORK_LABELS: Record<NetworkStatus, string> = {
-  connected:    'Connected',
-  connecting:   'Connecting',
-  disconnected: 'Offline',
+  connected:    'CONNECTED',
+  connecting:   'CONNECTING',
+  disconnected: 'OFFLINE',
 };
 
 const STATUS_COLORS: Record<NetworkStatus, string> = {
@@ -16,7 +18,9 @@ const STATUS_COLORS: Record<NetworkStatus, string> = {
   disconnected: 'var(--error)',
 };
 
-export function NetworkPage({ networkStatus }: NetworkPageProps) {
+export function NetworkPage({ networkStatus, health }: NetworkPageProps) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   return (
     <div>
       <div className="page-heading">
@@ -26,25 +30,78 @@ export function NetworkPage({ networkStatus }: NetworkPageProps) {
 
       {/* Status banner */}
       <div className="panel" style={{ marginBottom: 'var(--space-6)', borderLeft: `3px solid ${STATUS_COLORS[networkStatus]}` }}>
-        <div className="panel-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <span className={`network-dot ${networkStatus}`} style={{ width: 12, height: 12 }} aria-hidden="true" />
-          <div>
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Fabric Network {NETWORK_LABELS[networkStatus]}
+        <div className="panel-body">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+              <span className={`network-dot ${networkStatus}`} style={{ width: 12, height: 12 }} aria-hidden="true" />
+              <div>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
+                  Fabric Network — {NETWORK_LABELS[networkStatus]}
+                </div>
+                {networkStatus === 'disconnected' && (
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--error)', marginTop: 4 }}>
+                    {health?.error || 'Unable to establish connection to the Fabric gateway or chaincode.'}
+                  </div>
+                )}
+                {networkStatus === 'connecting' && (
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 4 }}>
+                    Establishing connection to the Fabric gateway…
+                  </div>
+                )}
+                {networkStatus === 'connected' && (
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--success)', marginTop: 4 }}>
+                    Fabric peer connected. Channel: {health?.network || 'mychannel'}, Chaincode: {health?.chaincode || 'bmsprovenance'}
+                  </div>
+                )}
+              </div>
             </div>
+
             {networkStatus === 'disconnected' && (
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--error)', marginTop: 4 }}>
-                Unable to reach the Hyperledger Fabric gateway. Verify the backend service is running.
-              </div>
-            )}
-            {networkStatus === 'connecting' && (
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: 4 }}>
-                Establishing connection to the Fabric gateway…
-              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowDiagnostics(prev => !prev)}
+                aria-expanded={showDiagnostics}
+              >
+                {showDiagnostics ? 'Hide Diagnostic Details ▲' : 'Expand Diagnostics ▼'}
+              </button>
             )}
           </div>
+
+          {/* Expandable diagnostic panel */}
+          {networkStatus === 'disconnected' && showDiagnostics && (
+            <div style={{
+              marginTop: 'var(--space-4)',
+              padding: 'var(--space-4)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--error)',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--text-xs)',
+              color: 'var(--text-primary)',
+            }}>
+              <div style={{ fontWeight: 600, color: 'var(--error)', marginBottom: 6 }}>
+                Fabric Network Diagnostic Summary
+              </div>
+              <div style={{ marginBottom: 4 }}><strong>Endpoint:</strong> GET /api/health/fabric</div>
+              <div style={{ marginBottom: 4 }}><strong>Target Channel:</strong> {health?.network || 'mychannel'}</div>
+              <div style={{ marginBottom: 4 }}><strong>Target Chaincode:</strong> {health?.chaincode || 'bmsprovenance'}</div>
+              <div style={{ marginBottom: 6 }}><strong>Actual Error Message:</strong></div>
+              <pre style={{
+                background: 'var(--bg-main)',
+                padding: 'var(--space-3)',
+                borderRadius: 4,
+                overflowX: 'auto',
+                whiteSpace: 'pre-wrap',
+                color: 'var(--error)',
+                margin: 0
+              }}>
+                {health?.error || 'No response received from backend provenance service.'}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
+
 
       {/* Network details */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>

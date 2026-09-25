@@ -23,7 +23,7 @@ const PAGE_TITLES: Record<Page, string> = {
 
 function AppInner() {
   const [currentPage, setCurrentPage] = useState<Page>('overview');
-  const { status, refresh } = useNetworkStatus();
+  const { status, health, refresh } = useNetworkStatus();
 
   useEffect(() => {
     refresh();
@@ -37,7 +37,7 @@ function AppInner() {
       case 'lifecycle':   return <LifecyclePage />;
       case 'provenance':  return <ProvenancePage />;
       case 'audit':       return <AuditPage />;
-      case 'network':     return <NetworkPage networkStatus={status} />;
+      case 'network':     return <NetworkPage networkStatus={status} health={health} />;
       case 'settings':    return <div className="empty-state"><p className="empty-state-title">Settings</p><p className="empty-state-desc">Configuration options for the provenance platform.</p></div>;
       default:            return null;
     }

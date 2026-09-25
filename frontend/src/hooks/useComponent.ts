@@ -1,8 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   registerComponent,
   getComponent,
-  checkNetworkHealth,
   getSystemOverview,
 } from '../services/componentService';
 import type { Component, RegisterComponentPayload } from '../types/component';
@@ -120,24 +119,34 @@ export function useComponentSearch(): UseComponentSearchReturn {
   return { state, component, errorMessage, search, clear };
 }
 
-// ─── Network Status Hook ─────────────────────────────────────────────────────
+import { checkFabricHealth } from '../services/componentService';
+import type { FabricHealthResult } from '../types/component';
 
 interface UseNetworkStatusReturn {
   status: NetworkStatus;
-  refresh: () => void;
+  health: FabricHealthResult | null;
+  refresh: () => Promise<void>;
 }
 
 export function useNetworkStatus(): UseNetworkStatusReturn {
   const [status, setStatus] = useState<NetworkStatus>('connecting');
+  const [health, setHealth] = useState<FabricHealthResult | null>(null);
 
   const refresh = useCallback(async () => {
-    setStatus('connecting');
-    const ok = await checkNetworkHealth();
-    setStatus(ok ? 'connected' : 'disconnected');
+    const res = await checkFabricHealth();
+    setHealth(res);
+    setStatus(res.connected ? 'connected' : 'disconnected');
   }, []);
 
-  return { status, refresh };
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 10000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  return { status, health, refresh };
 }
+
 
 // ─── System Overview Hook ────────────────────────────────────────────────────
 
