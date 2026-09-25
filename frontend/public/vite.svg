@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Component Provenance icon: chain links -->
+  <rect width="32" height="32" rx="6" fill="#1c2128"/>
+  <rect x="4" y="13" width="8" height="6" rx="2" stroke="#388bfd" stroke-width="2" fill="none"/>
+  <rect x="20" y="13" width="8" height="6" rx="2" stroke="#388bfd" stroke-width="2" fill="none"/>
+  <line x1="12" y1="16" x2="20" y2="16" stroke="#388bfd" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="16" cy="7" r="3" stroke="#3fb950" stroke-width="2" fill="none"/>
+  <circle cx="16" cy="25" r="3" stroke="#3fb950" stroke-width="2" fill="none"/>
+  <line x1="16" y1="10" x2="16" y2="13" stroke="#3fb950" stroke-width="2" stroke-linecap="round"/>
+  <line x1="16" y1="19" x2="16" y2="22" stroke="#3fb950" stroke-width="2" stroke-linecap="round"/>
+</svg>
