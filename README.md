@@ -1,37 +1,20 @@
 # Secure BMS Component Provenance
 
-Day 1 implementation for the **Secure Blockchain for Component Provenance** problem statement using Hyperledger Fabric.
+Day 1 implementation for the **Secure Blockchain for Component Provenance** problem using Hyperledger Fabric.
 
-## Day 1 Scope
-
-Today's implementation covers only:
+The Day 1 goal is simple:
 
 ```text
-Manufacturer
-    ↓
-CreateComponent()
-    ↓
-Fabric Ledger
-    ↓
-GetComponent()
-    ↓
-Display Component Details
+Create Component
+      ↓
+Store on Fabric Ledger
+      ↓
+Get Component
+      ↓
+Display Component
 ```
 
-Later milestones will add certification, transportation, warehouse custody, assembly, and full provenance verification.
-
-## Technology Stack
-
-- Hyperledger Fabric 2.5.16
-- Hyperledger Fabric CA 1.5.17
-- JavaScript chaincode
-- Node.js 20.x
-- npm
-- Docker Desktop + WSL2
-- Fabric test network
-- Channel: `mychannel`
-
-## Component Used for Day 1
+## Day 1 Component
 
 | Field | Value |
 |---|---|
@@ -40,86 +23,283 @@ Later milestones will add certification, transportation, warehouse custody, asse
 | Manufacturer | EVTech Manufacturing |
 | Manufacturing Date | 24-09-2026 |
 | Location | Bengaluru |
-| Initial Status | MANUFACTURED |
+| Status | MANUFACTURED |
 
-## Prerequisites
+## Technology
 
-Each team member should have:
-
-- Windows with WSL2
-- Ubuntu/Ubuntu-CloudStorm
-- Docker Desktop with WSL integration enabled
-- Git
+- Hyperledger Fabric 2.5.16
+- Hyperledger Fabric CA 1.5.17
+- JavaScript chaincode
 - Node.js 20.x
 - npm
+- Docker Desktop
+- Fabric test network
+- Channel: `mychannel`
+
+**Go is not required for this project.** We are using JavaScript chaincode.
+
+---
+
+# Setup for Windows
+
+## Step 1: Install WSL2
+
+Open **PowerShell as Administrator** and run:
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+Restart Windows if prompted.
+
+After restarting, open **Ubuntu** from the Start menu and complete the first-time setup by creating your Linux username and password.
+
+Check that WSL is using version 2:
+
+```powershell
+wsl -l -v
+```
+
+Your Ubuntu distribution should show **VERSION 2**.
+
+Microsoft documents `wsl --install` for installing WSL and allows a distribution to be selected with `-d`. urlMicrosoft WSL installation guidehttps://learn.microsoft.com/en-us/windows/wsl/install
+
+## Step 2: Install Docker Desktop
+
+Download and install **Docker Desktop for Windows**.
+
+After installation:
+
+1. Open Docker Desktop.
+2. Go to **Settings → General**.
+3. Make sure **Use WSL 2 based engine** is enabled.
+4. Go to **Settings → Resources → WSL Integration**.
+5. Enable integration for your Ubuntu distribution.
+
+Docker's Windows documentation recommends Docker Desktop with the WSL 2 backend and WSL integration. urlDocker Desktop + WSL2https://docs.docker.com/desktop/features/wsl/
+
+Close and reopen Ubuntu after enabling integration.
+
+## Step 3: Install Git, cURL and jq inside Ubuntu
+
+Run these commands **inside Ubuntu**, not PowerShell:
+
+```bash
+sudo apt update
+sudo apt install -y git curl jq
+```
+
+Check:
+
+```bash
+git --version
+curl --version
+jq --version
+docker --version
+docker compose version
+```
+
+## Step 4: Install Node.js 20
+
+We use NVM so Node is installed inside WSL rather than using the Windows Node installation.
+
+Run:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh | bash
+source ~/.bashrc
+```
+
+Verify NVM:
+
+```bash
+command -v nvm
+```
+
+Install Node 20:
+
+```bash
+nvm install 20
+nvm use 20
+nvm alias default 20
+```
+
+Verify:
+
+```bash
+node --version
+npm --version
+which node
+which npm
+```
+
+The Node path should point to your WSL/NVM installation, for example:
+
+```text
+/home/<username>/.nvm/versions/node/v20.x.x/bin/node
+```
+
+NVM supports macOS, Unix/Linux and Windows WSL. urlNVM projecthttps://github.com/nvm-sh/nvm
+
+## Step 5: Install Hyperledger Fabric
+
+Create the Fabric workspace:
+
+```bash
+mkdir -p ~/fabric
+cd ~/fabric
+```
+
+Download the official Fabric installer:
+
+```bash
+curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh
+chmod +x install-fabric.sh
+```
+
+Install Fabric binaries, Docker images and samples:
+
+```bash
+./install-fabric.sh docker binary samples
+```
+
+The current installer defaults to Fabric **2.5.16** and Fabric CA **1.5.17**. It also detects the machine architecture automatically. urlOfficial Fabric installerhttps://github.com/hyperledger/fabric/blob/main/scripts/install-fabric.sh
+
+The installer may print:
+
+```text
+fabric-samples v2.5.16 does not exist, defaulting to main
+```
+
+This is expected with the current installer. For this project, use the normal Raft test-network commands below and **do not use the BFT option**.
+
+Verify Fabric:
+
+```bash
+cd ~/fabric/fabric-samples
+./bin/peer version
+```
+
+Expected:
+
+```text
+Version: v2.5.16
+```
+
+---
+
+# Setup for MacBook
+
+These instructions work for both **Apple Silicon (M1/M2/M3/M4)** and **Intel** Macs. The Fabric installer automatically detects the architecture.
+
+## Step 1: Install Homebrew
+
+Open **Terminal**:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Then install the basic tools:
+
+```bash
+brew install git curl jq
+```
+
+Check:
+
+```bash
+brew --version
+git --version
+curl --version
+jq --version
+```
+
+Hyperledger Fabric's prerequisites documentation recommends Homebrew for macOS. urlFabric prerequisites for macOShttps://github.com/hyperledger/fabric/blob/main/docs/source/prereqs.md
+
+## Step 2: Install Docker Desktop
+
+Install **Docker Desktop for Mac**.
+
+You can use Homebrew:
+
+```bash
+brew install --cask docker
+```
+
+Open Docker Desktop:
+
+```bash
+open -a Docker
+```
+
+Wait until Docker Desktop reports that Docker is running.
 
 Verify:
 
 ```bash
 docker --version
 docker compose version
-git --version
-node --version
-npm --version
 ```
 
-For Node.js, use Linux Node inside WSL. With NVM:
+Docker provides separate downloads for Apple Silicon and Intel Macs; use the build matching the Mac's processor. urlDocker Desktop for Machttps://docs.docker.com/desktop/setup/install/mac-install/
+
+## Step 3: Install Node.js 20
+
+Install NVM:
 
 ```bash
-source ~/.bashrc
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh | bash
+```
+
+Close and reopen Terminal, or load the shell configuration:
+
+```bash
+source ~/.zshrc
+```
+
+Verify:
+
+```bash
+command -v nvm
+```
+
+Install Node 20:
+
+```bash
 nvm install 20
 nvm use 20
 nvm alias default 20
+```
 
+Verify:
+
+```bash
 node --version
 npm --version
+which node
+which npm
 ```
 
-The Node executable should come from the WSL/NVM installation, for example:
+## Step 4: Install Hyperledger Fabric
 
-```text
-/home/<user>/.nvm/versions/node/v20.x.x/bin/node
-```
-
-## 1. Get the Project
-
-Clone the repository inside the WSL Linux filesystem:
+Create the workspace:
 
 ```bash
 mkdir -p ~/fabric
 cd ~/fabric
-
-git clone https://github.com/Deepak-Reddy-56/secure-bms-provenance.git bms-provenance
-cd bms-provenance
 ```
 
-Do not clone the project under `/mnt/c/...` for development.
-
-## 2. Install Chaincode Dependencies
+Download the installer:
 
 ```bash
-cd ~/fabric/bms-provenance/chaincode/javascript
-npm install
-```
-
-This installs the dependencies listed in `package.json`, including:
-
-- `fabric-contract-api`
-- `fabric-shim`
-
-The `node_modules` directory is intentionally not committed to Git.
-
-## 3. Get Hyperledger Fabric
-
-If Fabric is not already installed on the teammate's machine, install the same Fabric version used by this project:
-
-```bash
-mkdir -p ~/fabric
-cd ~/fabric
-
 curl -sSLO https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh
 chmod +x install-fabric.sh
+```
 
+Install Fabric:
+
+```bash
 ./install-fabric.sh docker binary samples
 ```
 
@@ -130,60 +310,140 @@ cd ~/fabric/fabric-samples
 ./bin/peer version
 ```
 
-Expected Fabric version:
+Expected:
 
 ```text
-v2.5.16
+Version: v2.5.16
 ```
 
-## 4. Start the Fabric Network
+The official installer detects Intel `x86_64` and Apple Silicon `arm64` automatically. urlOfficial Fabric installerhttps://github.com/hyperledger/fabric/blob/main/scripts/install-fabric.sh
 
-Use the Fabric test network supplied in `fabric-samples`:
+---
+
+# After the setup: Get this project
+
+These steps are the same on **Windows/WSL and Mac**.
+
+Create or use the Fabric workspace:
+
+```bash
+mkdir -p ~/fabric
+cd ~/fabric
+```
+
+Clone this repository:
+
+```bash
+git clone https://github.com/Deepak-Reddy-56/secure-bms-provenance.git bms-provenance
+```
+
+Enter the project:
+
+```bash
+cd ~/fabric/bms-provenance
+```
+
+Your workspace should look like:
+
+```text
+~/fabric/
+├── fabric-samples/
+└── bms-provenance/
+    ├── chaincode/
+    ├── .gitignore
+    └── README.md
+```
+
+**Do not put the project under `/mnt/c/...` when using WSL.** Keep it under `~/fabric`.
+
+---
+
+# Install the project dependencies
+
+Go to the JavaScript chaincode directory:
+
+```bash
+cd ~/fabric/bms-provenance/chaincode/javascript
+```
+
+Install npm dependencies:
+
+```bash
+npm install
+```
+
+Verify:
+
+```bash
+npm list fabric-contract-api fabric-shim
+```
+
+The project currently uses the Fabric 2.5 Node packages.
+
+---
+
+# Start the Fabric network
+
+Go to the Fabric test network:
 
 ```bash
 cd ~/fabric/fabric-samples/test-network
+```
 
+Start the network, create the channel and enable Certificate Authorities:
+
+```bash
 ./network.sh up createChannel -c mychannel -ca
 ```
 
-Verify the network:
+Verify that Fabric is running:
 
 ```bash
 docker ps
 ```
 
-You should see Fabric containers including peers, orderer, and CAs.
+You should see Fabric containers for the peers, orderer and Certificate Authorities.
 
-Optional peer health check:
+Optional health check for Org1 peer:
 
 ```bash
 curl -s http://localhost:9444/healthz
 ```
 
-Expected:
+A healthy peer returns a response containing:
 
 ```json
-{"status":"OK", ...}
+{"status":"OK"}
 ```
 
-## 5. Deploy BMS Chaincode
+The Fabric test network provides two peer organizations and an ordering service, and it can be used to deploy and test your own chaincode. urlFabric test network documentationhttps://github.com/hyperledger/fabric-samples/blob/main/test-network/README.md
+
+---
+
+# Deploy the BMS chaincode
 
 From the Fabric test-network directory:
 
 ```bash
 cd ~/fabric/fabric-samples/test-network
+```
 
+Deploy:
+
+```bash
 ./network.sh deployCC \
   -ccn bmsprovenance \
   -ccp ../../bms-provenance/chaincode/javascript \
   -ccl javascript
 ```
 
-This deploys the project's JavaScript chaincode to `mychannel`.
+The Fabric test-network script packages the chaincode, installs it on the peers, approves it for the organizations and commits the chaincode definition to the channel. urlFabric chaincode deployment documentationhttps://github.com/hyperledger/fabric/blob/main/docs/source/write_first_app.rst
 
-## 6. Chaincode Functions
+---
 
-### CreateComponent()
+# Day 1 Chaincode
+
+## CreateComponent()
 
 Inputs:
 
@@ -195,13 +455,13 @@ manufactureDate
 location
 ```
 
-The chaincode automatically sets:
+The smart contract automatically sets:
 
 ```text
 status = MANUFACTURED
 ```
 
-### GetComponent()
+## GetComponent()
 
 Input:
 
@@ -220,14 +480,20 @@ location
 status
 ```
 
-## 7. Required Day 1 Tests
+---
 
-The implementation must support these cases.
+# Required Day 1 Test Cases
 
-### Register Component
+## Test 1: Register the component
+
+Use:
 
 ```text
-BMS-2026-001
+Component ID: BMS-2026-001
+Component Type: BMS Controller
+Manufacturer: EVTech Manufacturing
+Manufacturing Date: 24-09-2026
+Location: Bengaluru
 ```
 
 Expected:
@@ -237,13 +503,13 @@ SUCCESS
 Component registered.
 ```
 
-### Retrieve Component
+## Test 2: Retrieve the component
 
 ```text
 GetComponent("BMS-2026-001")
 ```
 
-Expected component:
+Expected:
 
 ```text
 Component ID       : BMS-2026-001
@@ -254,9 +520,15 @@ Location            : Bengaluru
 Status              : MANUFACTURED
 ```
 
-### Duplicate ID
+## Test 3: Duplicate ID
 
-Attempt to register `BMS-2026-001` again.
+Try to register:
+
+```text
+BMS-2026-001
+```
+
+again.
 
 Expected:
 
@@ -265,7 +537,7 @@ ERROR
 Component already exists.
 ```
 
-### Non-existent ID
+## Test 4: Component not found
 
 Search for:
 
@@ -280,22 +552,47 @@ ERROR
 Component not found.
 ```
 
-## Project Structure
+---
 
-```text
-bms-provenance/
-├── chaincode/
-│   └── javascript/
-│       ├── index.js
-│       ├── package.json
-│       ├── package-lock.json
-│       └── lib/
-│           └── bmsContract.js
-├── .gitignore
-└── README.md
+# Useful Commands
+
+### Check Fabric
+
+```bash
+cd ~/fabric/fabric-samples
+./bin/peer version
 ```
 
-## Important
+### Check Docker
+
+```bash
+docker ps
+```
+
+### Stop the Fabric test network
+
+```bash
+cd ~/fabric/fabric-samples/test-network
+./network.sh down
+```
+
+### Start it again
+
+```bash
+cd ~/fabric/fabric-samples/test-network
+./network.sh up createChannel -c mychannel -ca
+```
+
+### Check project Git status
+
+```bash
+cd ~/fabric/bms-provenance
+git status
+```
+
+---
+
+# Files that must NOT be committed
 
 Do not commit:
 
@@ -309,33 +606,17 @@ channel-artifacts/
 
 Each developer should generate their own local Fabric network and cryptographic material.
 
-The repository contains the application/chaincode source; the Fabric network itself is created locally from `fabric-samples`.
+The repository contains our **BMS application and chaincode source**. Hyperledger Fabric itself is installed separately on each developer's machine.
 
-## Useful Commands
+---
 
-Stop the Fabric test network:
+# Official References
 
-```bash
-cd ~/fabric/fabric-samples/test-network
-./network.sh down
-```
-
-Check running Fabric containers:
-
-```bash
-docker ps
-```
-
-Check installed chaincode on Org1:
-
-```bash
-cd ~/fabric/fabric-samples/test-network
-peer lifecycle chaincode queryinstalled
-```
-
-Check Git state:
-
-```bash
-cd ~/fabric/bms-provenance
-git status
-```
+- Hyperledger Fabric: https://github.com/hyperledger/fabric
+- Fabric Samples: https://github.com/hyperledger/fabric-samples
+- Fabric prerequisites: https://github.com/hyperledger/fabric/blob/main/docs/source/prereqs.md
+- Fabric test network: https://github.com/hyperledger/fabric-samples/tree/main/test-network
+- Docker Desktop for Windows + WSL2: https://docs.docker.com/desktop/features/wsl/
+- Docker Desktop for Mac: https://docs.docker.com/desktop/setup/install/mac-install/
+- Microsoft WSL: https://learn.microsoft.com/en-us/windows/wsl/install
+- NVM: https://github.com/nvm-sh/nvm
