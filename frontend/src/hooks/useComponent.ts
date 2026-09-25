@@ -71,7 +71,7 @@ interface UseComponentSearchReturn {
   state: SearchState;
   component: Component | null;
   errorMessage: string | null;
-  search: (componentID: string) => Promise<void>;
+  search: (componentID: string, identityId?: string) => Promise<void>;
   clear: () => void;
 }
 
@@ -81,7 +81,7 @@ export function useComponentSearch(): UseComponentSearchReturn {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const search = useCallback(async (componentID: string) => {
+  const search = useCallback(async (componentID: string, identityId?: string) => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -90,7 +90,7 @@ export function useComponentSearch(): UseComponentSearchReturn {
     setComponent(null);
 
     try {
-      const found = await getComponent(componentID, abortRef.current.signal);
+      const found = await getComponent(componentID, abortRef.current.signal, identityId);
       setComponent(found);
       setState('found');
     } catch (err) {

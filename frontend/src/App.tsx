@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
+import { IdentityProvider } from './context/IdentityContext';
 import { useNetworkStatus } from './hooks/useComponent';
 import { Header } from './components/Header/Header';
 import { Footer } from './components/Footer/Footer';
 import { Dashboard } from './pages/Dashboard';
 
-export default function App() {
-  // Network status is shared at the app level for the header indicator
+function AppInner() {
   const { status, refresh } = useNetworkStatus();
 
   useEffect(() => {
@@ -39,5 +39,13 @@ export default function App() {
       <Dashboard networkStatus={status} />
       <Footer />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <IdentityProvider>
+      <AppInner />
+    </IdentityProvider>
   );
 }

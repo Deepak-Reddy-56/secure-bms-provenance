@@ -1,4 +1,6 @@
 import type { NetworkStatus } from '../../types/component';
+import { useIdentity } from '../../context/IdentityContext';
+import { IdentitySelector } from '../IdentitySelector/IdentitySelector';
 import './Header.css';
 
 interface HeaderProps {
@@ -31,6 +33,8 @@ const statusLabels: Record<NetworkStatus, string> = {
 };
 
 export function Header({ networkStatus }: HeaderProps) {
+  const { identity, roleLabel } = useIdentity();
+
   return (
     <header className="header" role="banner">
       <div className="header-inner">
@@ -47,21 +51,45 @@ export function Header({ networkStatus }: HeaderProps) {
           </div>
         </div>
 
-        {/* Network status */}
-        <div
-          className="network-status-pill"
-          aria-label={`Fabric network status: ${statusLabels[networkStatus]}`}
-        >
-          <span className="network-status-label">Fabric Network</span>
-          <div className="network-status-row">
-            <span
-              className={`status-dot ${networkStatus}`}
-              role="img"
-              aria-label={statusLabels[networkStatus]}
-            />
-            <span className={`network-status-text ${networkStatus}`}>
-              {statusLabels[networkStatus]}
-            </span>
+        {/* Right side — identity + network */}
+        <div className="header-right">
+          {/* Dev identity selector */}
+          <IdentitySelector />
+
+          {/* Divider */}
+          <div className="header-divider" aria-hidden="true" />
+
+          {/* Identity info display */}
+          <div className="header-identity-info">
+            <div className="header-identity-row">
+              <span className="header-identity-label">Identity</span>
+              <span className="header-identity-value mono">{identity.id}</span>
+            </div>
+            <div className="header-identity-row">
+              <span className="header-identity-label">Role</span>
+              <span className={`role-badge ${identity.role}`}>{roleLabel}</span>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="header-divider" aria-hidden="true" />
+
+          {/* Network status */}
+          <div
+            className="network-status-pill"
+            aria-label={`Fabric network status: ${statusLabels[networkStatus]}`}
+          >
+            <span className="network-status-label">Fabric Network</span>
+            <div className="network-status-row">
+              <span
+                className={`status-dot ${networkStatus}`}
+                role="img"
+                aria-label={statusLabels[networkStatus]}
+              />
+              <span className={`network-status-text ${networkStatus}`}>
+                {statusLabels[networkStatus]}
+              </span>
+            </div>
           </div>
         </div>
       </div>

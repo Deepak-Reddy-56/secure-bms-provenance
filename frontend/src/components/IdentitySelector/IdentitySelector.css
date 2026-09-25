@@ -1,0 +1,67 @@
+/* Identity Selector — Dev identity panel */
+
+.identity-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.identity-selector-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-amber);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.identity-selector-label::before {
+  content: '⚠';
+  font-size: 0.65rem;
+}
+
+.identity-selector-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.identity-select {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  min-width: 140px;
+}
+
+.identity-select:focus {
+  outline: none;
+  border-color: var(--color-blue);
+}
+
+.identity-select:hover {
+  border-color: var(--color-slate);
+}
+
+.role-badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.role-badge.MANUFACTURER { background: var(--color-blue-dim);  color: var(--color-blue-light); }
+.role-badge.CERTIFIER    { background: var(--color-green-dim);  color: var(--color-green-light); }
+.role-badge.TRANSPORTER  { background: var(--color-amber-dim);  color: var(--color-amber-light); }
+.role-badge.WAREHOUSE    { background: #2d1f50;                 color: #a78bfa; }
+.role-badge.ASSEMBLER    { background: #1a2d35;                 color: #38bdf8; }
+.role-badge.AUDITOR      { background: var(--color-bg-elevated); color: var(--color-text-secondary); border: 1px solid var(--color-border); }

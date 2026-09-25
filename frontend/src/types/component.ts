@@ -11,7 +11,16 @@ export interface Component {
   txId?: string;
 }
 
-export type ComponentStatus = 'MANUFACTURED' | string;
+/** Full Day 2 lifecycle status union */
+export type ComponentStatus =
+  | 'MANUFACTURED'
+  | 'CERTIFIED'
+  | 'SHIPPED'
+  | 'RECEIVED'
+  | 'TRANSFERRED'
+  | 'ASSEMBLED';
+
+// ── Day 1 payloads ──────────────────────────────────────────
 
 export interface RegisterComponentPayload {
   componentID: string;
@@ -21,8 +30,54 @@ export interface RegisterComponentPayload {
   location: string;
 }
 
+// ── Day 2 lifecycle action payloads ─────────────────────────
+
+export interface CertifyComponentPayload {
+  certificateID: string;
+  certificationDate: string;
+  complianceReference: string;
+}
+
+export interface ShipComponentPayload {
+  transporter: string;
+  from: string;
+  to: string;
+  shipmentID: string;
+  shipmentDate: string;
+}
+
+export interface ReceiveComponentPayload {
+  warehouse: string;
+  location: string;
+  receivedDate: string;
+}
+
+export interface TransferCustodyPayload {
+  from: string;
+  to: string;
+  location: string;
+  transferDate: string;
+}
+
+export interface AssembleComponentPayload {
+  assembler: string;
+  assemblyID: string;
+  location: string;
+}
+
+// ── Action result from any lifecycle operation ───────────────
+
+export interface LifecycleActionResult {
+  component: Component;
+  txId?: string;
+  message?: string;
+}
+
+// ── State machine types ──────────────────────────────────────
+
 export type RegistrationState = 'idle' | 'submitting' | 'success' | 'error';
 export type SearchState = 'idle' | 'searching' | 'found' | 'not_found' | 'error';
+export type ActionState = 'idle' | 'submitting' | 'success' | 'error';
 
 export type NetworkStatus = 'connected' | 'connecting' | 'disconnected';
 

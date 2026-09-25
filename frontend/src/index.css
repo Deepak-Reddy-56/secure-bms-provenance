@@ -540,3 +540,35 @@ code, pre, .mono {
     padding: var(--space-4) var(--space-4);
   }
 }
+
+/* ── Day 2 additions ── */
+
+/* Small button variant */
+.btn-sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  height: auto;
+  min-height: unset;
+}
+
+/* Spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* mono utility */
+.mono {
+  font-family: var(--font-mono);
+}
+

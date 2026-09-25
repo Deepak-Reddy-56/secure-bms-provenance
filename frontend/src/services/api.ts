@@ -6,16 +6,18 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   signal?: AbortSignal;
+  extraHeaders?: Record<string, string>;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal } = options;
+  const { method = 'GET', body, signal, extraHeaders = {} } = options;
 
   const fetchOptions: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      ...extraHeaders,
     },
     signal,
   };
@@ -60,9 +62,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
-  get: <T>(path: string, signal?: AbortSignal) =>
-    request<T>(path, { method: 'GET', signal }),
+  get: <T>(path: string, signal?: AbortSignal, extraHeaders?: Record<string, string>) =>
+    request<T>(path, { method: 'GET', signal, extraHeaders }),
 
-  post: <T>(path: string, body: unknown, signal?: AbortSignal) =>
-    request<T>(path, { method: 'POST', body, signal }),
+  post: <T>(path: string, body: unknown, signal?: AbortSignal, extraHeaders?: Record<string, string>) =>
+    request<T>(path, { method: 'POST', body, signal, extraHeaders }),
 };
