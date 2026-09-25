@@ -1,0 +1,17 @@
+{
+  "name": "bms-provenance-chaincode",
+  "version": "1.0.0",
+  "description": "Hyperledger Fabric chaincode for BMS component provenance",
+  "main": "index.js",
+  "scripts": {
+    "start": "fabric-chaincode-node start"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "fabric-contract-api": "~2.5",
+    "fabric-shim": "~2.5"
+  },
+  "license": "Apache-2.0"
+}
