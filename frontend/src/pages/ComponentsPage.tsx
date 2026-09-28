@@ -481,7 +481,7 @@ if (currentStatus !== 'TRANSFERRED') {
                         title: 'Certify Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'MANUFACTURED', toStatus: 'CERTIFIED',
                         fields: [{ label: 'Certificate ID', value: cert.certificateID }, { label: 'Compliance', value: cert.complianceReference }],
-                      }, () => action.execute(sig => certifyComponent(activeID, cert, sig, identity.id))
+                      }, () => action.execute(sig => certifyComponent(activeID, cert, sig))
                         .then( success => {if (success){handleSuccess(`Component ${activeID} certified successfully`);
                       }
                     }));
@@ -526,7 +526,7 @@ if (currentStatus !== 'TRANSFERRED') {
                         title: 'Ship Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
                         fields: [{ label: 'From', value: ship.from }, { label: 'To', value: ship.to }, { label: 'Shipment ID', value: ship.shipmentID }],
-                      }, () => action.execute(sig => shipComponent(activeID, ship, sig, identity.id))
+                      }, () => action.execute(sig => shipComponent(activeID, ship, sig))
                         .then(success => {if(success){handleSuccess(`Component ${activeID} shipped`);
                         }
                       }));
@@ -560,7 +560,7 @@ if (currentStatus !== 'TRANSFERRED') {
                         title: 'Receive Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'SHIPPED', toStatus: 'RECEIVED',
                         fields: [{ label: 'Warehouse', value: recv.warehouse }, { label: 'Location', value: recv.location }],
-                      }, () => action.execute(sig => receiveComponent(activeID, recv, sig, identity.id))
+                      }, () => action.execute(sig => receiveComponent(activeID, recv, sig))
                         .then(success => { if(success){handleSuccess(`Component ${activeID} received`);
                       }
                     }));
@@ -591,7 +591,7 @@ if (currentStatus !== 'TRANSFERRED') {
                         title: 'Transfer Custody', componentID: activeID, actor: identity.id,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
                         fields: [{ label: 'From', value: xfr.from }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
-                      }, () => action.execute(sig => transferCustody(activeID, xfr, sig, identity.id))
+                      }, () => action.execute(sig => transferCustody(activeID, xfr, sig))
                         .then(success => {if(success){handleSuccess(`Custody transferred for ${activeID}`);
                       }
                     }));
@@ -621,7 +621,7 @@ if (currentStatus !== 'TRANSFERRED') {
                         title: 'Assemble Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
                         fields: [{ label: 'Assembler', value: assy.assembler }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
-                      }, () => action.execute(sig => assembleComponent(activeID, assy, sig, identity.id))
+                      }, () => action.execute(sig => assembleComponent(activeID, assy, sig))
                         .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
                       }
                     }));
