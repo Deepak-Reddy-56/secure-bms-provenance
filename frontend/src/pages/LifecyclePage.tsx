@@ -32,7 +32,6 @@ function getStageState(stage: ComponentStatus, current: string): 'completed' | '
 }
 
 export function LifecyclePage() {
-  const { identity } = useIdentity();
   const search = useComponentSearch();
   const [searchInput, setSearchInput] = useState('');
 
