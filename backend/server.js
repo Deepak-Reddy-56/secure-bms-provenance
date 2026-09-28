@@ -211,6 +211,7 @@ const server = http.createServer(async (req, res) => {
             picture: user.picture,
           },
           fabricIdentity: user.fabricIdentity,
+          isAdmin: user.isAdmin === true,
         }));
       } catch (err) {
         if (err.code === 'PROVISIONING_REQUIRED') {
@@ -295,6 +296,7 @@ const server = http.createServer(async (req, res) => {
           picture: session.picture,
         },
         fabricIdentity: session.fabricIdentity,
+        isAdmin: session.isAdmin === true,
       }));
     }
 
@@ -315,6 +317,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     const identity = session.fabricIdentity;
+
+    if (session.isAdmin === true && !pathname.startsWith('/api/admin/')) {
+      res.writeHead(403, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        error: 'Administrator account cannot perform operational Fabric actions.',
+      }));
+    }
 
     console.log(
       `[${new Date().toISOString()}] ${req.method} ${pathname} ` +
