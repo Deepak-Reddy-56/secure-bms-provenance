@@ -11,7 +11,6 @@ const {
 
 require('dotenv').config();
 const http = require('http');
-const { urlencoded } = require('stream/consumers');
 
 const {
   checkFabricConnection,
@@ -33,7 +32,6 @@ const {
 
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
 function setCorsHeaders(req, res) {
   const allowedOrigins = [
