@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 const sessions = new Map();
 
@@ -35,6 +35,23 @@ function getSession(token) {
   return session;
 }
 
+function updateSession(token, user) {
+  const session = getSession(token);
+
+  if (!session) {
+    return null;
+  }
+
+  const updatedSession = {
+    ...session,
+    ...user,
+  };
+
+  sessions.set(token, updatedSession);
+
+  return updatedSession;
+}
+
 function deleteSession(token) {
   if (token) {
     sessions.delete(token);
@@ -57,5 +74,6 @@ cleanupTimer.unref();
 module.exports = {
   createSession,
   getSession,
+  updateSession,
   deleteSession,
 };
