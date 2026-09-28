@@ -40,10 +40,9 @@ function apiWithIdentity(identityId?: string) {
  */
 export async function registerComponent(
   payload: RegisterComponentPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<Component> {
-  return apiWithIdentity(identityId).post<Component>('/api/components', payload, signal);
+  return api.post<Component>('/api/components', payload, signal);
 }
 
 /**
@@ -52,11 +51,10 @@ export async function registerComponent(
  */
 export async function getComponent(
   componentID: string,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<Component> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).get<Component>(`/api/components/${encoded}`, signal);
+  return api.get<Component>(`/api/components/${encoded}`, signal);
 }
 
 // ── Day 2 lifecycle operations ────────────────────────────────
@@ -67,11 +65,10 @@ export async function getComponent(
 export async function certifyComponent(
   componentID: string,
   payload: CertifyComponentPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).post<LifecycleActionResult>(
+  return api.post<LifecycleActionResult>(
     `/api/components/${encoded}/certify`,
     payload,
     signal
@@ -84,11 +81,10 @@ export async function certifyComponent(
 export async function shipComponent(
   componentID: string,
   payload: ShipComponentPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).post<LifecycleActionResult>(
+  return api.post<LifecycleActionResult>(
     `/api/components/${encoded}/ship`,
     payload,
     signal
@@ -101,11 +97,10 @@ export async function shipComponent(
 export async function receiveComponent(
   componentID: string,
   payload: ReceiveComponentPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).post<LifecycleActionResult>(
+  return api.post<LifecycleActionResult>(
     `/api/components/${encoded}/receive`,
     payload,
     signal
@@ -118,11 +113,10 @@ export async function receiveComponent(
 export async function transferCustody(
   componentID: string,
   payload: TransferCustodyPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).post<LifecycleActionResult>(
+  return api.post<LifecycleActionResult>(
     `/api/components/${encoded}/transfer`,
     payload,
     signal
@@ -135,11 +129,10 @@ export async function transferCustody(
 export async function assembleComponent(
   componentID: string,
   payload: AssembleComponentPayload,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).post<LifecycleActionResult>(
+  return api.post<LifecycleActionResult>(
     `/api/components/${encoded}/assemble`,
     payload,
     signal
@@ -151,11 +144,10 @@ export async function assembleComponent(
  */
 export async function getComponentHistory(
   componentID: string,
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<ProvenanceEvent[]> {
   const encoded = encodeURIComponent(componentID.trim());
-  return apiWithIdentity(identityId).get<ProvenanceEvent[]>(
+  return api.get<ProvenanceEvent[]>(
     `/api/components/${encoded}/history`,
     signal
   );
@@ -167,11 +159,10 @@ export async function getComponentHistory(
  * Fetch aggregate system overview. Gracefully returns null if endpoint missing.
  */
 export async function getSystemOverview(
-  signal?: AbortSignal,
-  identityId?: string
+  signal?: AbortSignal
 ): Promise<{ registeredCount: number } | null> {
   try {
-    return await apiWithIdentity(identityId).get<{ registeredCount: number }>(
+    return await api.get<{ registeredCount: number }>(
       '/api/overview',
       signal
     );
