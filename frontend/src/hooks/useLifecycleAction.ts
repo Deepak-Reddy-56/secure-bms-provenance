@@ -80,7 +80,7 @@ interface UseProvenanceHistoryReturn {
   clear: () => void;
 }
 
-export function useProvenanceHistory(): UseProvenanceHistoryReturn {
+export function useProvenanceHistory(routeBase = '/api/components'): UseProvenanceHistoryReturn {
   const [events,       setEvents]       = useState<ProvenanceEvent[]>([]);
   const [loading,      setLoading]      = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -95,7 +95,11 @@ export function useProvenanceHistory(): UseProvenanceHistoryReturn {
     setEvents([]);
 
     try {
-      const history = await getComponentHistory(componentID, abortRef.current.signal);
+      const history = await getComponentHistory(
+        componentID,
+        abortRef.current.signal,
+        routeBase
+      );
       setEvents(history);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -107,7 +111,7 @@ export function useProvenanceHistory(): UseProvenanceHistoryReturn {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [routeBase]);
 
   const clear = useCallback(() => {
     if (abortRef.current) abortRef.current.abort();
