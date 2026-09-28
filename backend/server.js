@@ -1,15 +1,52 @@
+const {
+  authenticateGoogleToken,
+} = require('./auth');
+
+const {
+  createSession,
+  getSession,
+  deleteSession,
+} = require('./sessionStore');
+
+require('dotenv').config();
 const http = require('http');
 const { urlencoded } = require('stream/consumers');
-const { checkFabricConnection, createComponentOnLedger, getComponentFromLedger, invokeChaincode } = require('./fabricGateway');
+
+const {
+  checkFabricConnection,
+  createComponentOnLedger,
+  getComponentFromLedger,
+  invokeChaincode,
+  queryChaincode
+} = require('./fabricGateway');
+
+
 
 const PORT = process.env.PORT || 3000;
 
-let registeredCount = 0;
+function setCorsHeaders(req, res) {
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
 
-function setCorsHeaders(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Identity, Accept');
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, OPTIONS'
+  );
+
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Accept'
+  );
 }
 
 function parseJsonBody(req) {
@@ -30,8 +67,69 @@ function parseJsonBody(req) {
   });
 }
 
+function parseCookies(req) {
+  const cookieHeader = req.headers.cookie;
+
+  if (!cookieHeader) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    cookieHeader.split(';').map(cookie => {
+      const index = cookie.indexOf('=');
+
+      if (index === -1) {
+        return [cookie.trim(), ''];
+      }
+
+      const key = cookie.slice(0, index).trim();
+      const value = cookie.slice(index + 1).trim();
+
+      return [key, value];
+    })
+  );
+}
+
+function cleanFabricError(err) {
+  let msg = err?.message || String(err);
+
+  // Fabric Gateway often wraps the chaincode error like:
+  // Error: endorsement failure ... message:"Unauthorized role."
+  const fabricMessage = msg.match(/message:"([^"]+)"/);
+
+  if (fabricMessage) {
+    msg = fabricMessage[1];
+  }
+
+  // Remove a redundant leading "Error:"
+  msg = msg.replace(/^Error:\s*/, '').trim();
+
+  // Normalize common lifecycle messages
+  if (msg.includes('already assembled')) {
+    return 'Component already assembled.';
+  }
+
+  if (msg.includes('already certified')) {
+    return 'Component already certified.';
+  }
+
+  if (msg.includes('already exists')) {
+    return 'Component already exists.';
+  }
+
+  if (msg.includes('not found')) {
+    return 'Component not found.';
+  }
+
+  if (msg.includes('Unauthorized role')) {
+    return 'Unauthorized role.';
+  }
+
+  return msg || 'Operation failed.';
+}
+
 const server = http.createServer(async (req, res) => {
-  setCorsHeaders(res);
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -40,35 +138,211 @@ const server = http.createServer(async (req, res) => {
 
   const urlObj = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = urlObj.pathname;
-  const identity = req.headers['x-identity'] || 'manufacturer1';
-
-  console.log(`[${new Date().toISOString()}] ${req.method} ${pathname} (Identity: ${identity})`);
 
   try {
     // ── 1. GET /api/health ──────────────────────────────────────────────
+    // Public endpoint used for basic service health.
     if (req.method === 'GET' && pathname === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ status: 'OK', service: 'bms-provenance-backend', timestamp: new Date().toISOString() }));
+      return res.end(JSON.stringify({
+        status: 'OK',
+        service: 'bms-provenance-backend',
+        timestamp: new Date().toISOString()
+      }));
     }
 
     // ── 2. GET /api/health/fabric ───────────────────────────────────────
+    // Public endpoint used by the frontend network indicator.
     if (req.method === 'GET' && pathname === '/api/health/fabric') {
       const health = await checkFabricConnection();
-      const statusCode = health.connected ? 200 : 503;
-      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(health));
+
+      res.writeHead(
+        health.connected ? 200 : 503,
+        { 'Content-Type': 'application/json' }
+      );
+
+      return res.end(JSON.stringify({
+        connected: health.connected,
+        network: health.network,
+        chaincode: health.chaincode
+      }));
     }
+
+    // ── Google authentication ────────────────────────────────────────────
+    if (req.method === 'POST' && pathname === '/api/auth/google') {
+      try {
+        const body = await parseJsonBody(req);
+
+        if (!body.idToken) {
+          res.writeHead(400, {
+            'Content-Type': 'application/json',
+          });
+
+          return res.end(JSON.stringify({
+            error: 'Google ID token is required.',
+          }));
+        }
+
+        const user = await authenticateGoogleToken(body.idToken);
+
+        const sessionToken = createSession(user);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie':
+            `session_token=${sessionToken}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800`,
+        });
+
+        return res.end(JSON.stringify({
+          authenticated: true,
+          user: {
+            email: user.email,
+            name: user.name,
+            picture: user.picture,
+          },
+          fabricIdentity: user.fabricIdentity,
+        }));
+      } catch (err) {
+        if (err.code === 'PROVISIONING_REQUIRED') {
+          res.writeHead(403, {
+            'Content-Type': 'application/json',
+          });
+
+          return res.end(JSON.stringify({
+            error: err.message,
+            provisioningRequired: true,
+            sub: err.sub,
+            email: err.email,
+            name: err.name,
+          }));
+        }
+
+        console.error(
+          'Google authentication failed:',
+          err.message
+        );
+
+        res.writeHead(401, {
+          'Content-Type': 'application/json',
+        });
+
+        return res.end(JSON.stringify({
+          error: err.message || 'Google authentication failed.',
+        }));
+      }
+    }
+
+    // ── Logout ──────────────────────────────────────────────────────────
+    if (
+      req.method === 'POST' &&
+      pathname === '/api/auth/logout'
+    ) {
+      const cookies = parseCookies(req);
+
+      deleteSession(cookies.session_token);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie':
+          'session_token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0',
+      });
+
+      return res.end(
+        JSON.stringify({
+          authenticated: false,
+        })
+      );
+    }
+
+
+    // ── Current authenticated user ──────────────────────────────────────
+    if (
+      req.method === 'GET' &&
+      pathname === '/api/auth/me'
+    ) {
+      const cookies = parseCookies(req);
+      const session = getSession(cookies.session_token);
+
+      if (!session) {
+        res.writeHead(401, {
+          'Content-Type': 'application/json',
+        });
+
+        return res.end(JSON.stringify({
+          authenticated: false,
+        }));
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        authenticated: true,
+        user: {
+          email: session.email,
+          name: session.name,
+          picture: session.picture,
+        },
+        fabricIdentity: session.fabricIdentity,
+      }));
+    }
+
+    
+
+    // ── Protected API authentication ───────────────────────────────────
+    const cookies = parseCookies(req);
+    const session = getSession(cookies.session_token);
+
+    if (!session) {
+      res.writeHead(401, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        error: 'Authentication required.',
+      }));
+    }
+
+    const identity = session.fabricIdentity;
+
+    console.log(
+      `[${new Date().toISOString()}] ${req.method} ${pathname} ` +
+      `(Fabric Identity: ${identity})`
+    );
 
     // ── 3. GET /api/overview ───────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/api/overview') {
-      const health = await checkFabricConnection();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        registeredCount,
-        networkStatus: health.connected ? 'connected' : 'disconnected',
-        network: 'mychannel',
-        chaincode: 'bmsprovenance',
-      }));
+      try {
+        const health = await checkFabricConnection();
+
+        const componentsOutput = await queryChaincode(
+          'GetAllComponents',
+          [],
+          identity
+        );
+
+        const components = JSON.parse(componentsOutput);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          registeredCount: Array.isArray(components) ? components.length : 0,
+          networkStatus: health.connected ? 'connected' : 'disconnected',
+          network: 'mychannel',
+          chaincode: 'bmsprovenance',
+        }));
+      } catch (err) {
+        console.error('Overview query failed:', err);
+
+        const msg = cleanFabricError(err);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     // ── 4. POST /api/components - Register Component ───────────────────
@@ -86,12 +360,11 @@ const server = http.createServer(async (req, res) => {
           componentID, componentType, manufacturer, manufactureDate, location
         }, identity);
 
-        registeredCount++;
         res.writeHead(201, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (err) {
         console.error('Error creating component:', err);
-        const msg = err.message || 'Failed to create component on Fabric ledger';
+        const msg = cleanFabricError(err);
         const code = msg.includes('already exists') ? 409 : 500;
         res.writeHead(code, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: msg }));
@@ -108,7 +381,7 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify(result));
         } catch (err) {
-          const msg = err.message || `Component not found: ${id}`;
+          const msg = cleanFabricError(err);
           const code = (msg.includes('not found') || msg.includes('does not exist')) ? 404 : 500;
           res.writeHead(code, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: msg }));
@@ -120,77 +393,316 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/certify$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
+
       try {
-        await invokeChaincode('CertifyComponent', [id, body.certificateID || 'CERT-001', body.complianceReference || 'ISO-9001'], identity);
-      } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: `Component ${id} certified successfully`, txId: 'tx-' + Date.now() }));
+        const { output, txId } = await invokeChaincode(
+          'CertifyComponent',
+          [
+            id,
+            body.certificateID || 'CERT-001',
+            body.certificationDate || new Date().toISOString().split('T')[0],
+            body.complianceReference || 'ISO-9001'
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} certified successfully`,
+          component,
+          txId
+        }));
+
+      } catch (err) {
+        console.error('Certification failed:', err);
+
+        const msg = cleanFabricError(err);
+
+        let code = 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('already certified') ||
+          msg.includes('Invalid component status')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/ship$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
+
       try {
-        await invokeChaincode('ShipComponent', [id, body.transporter || identity, body.from || 'Origin', body.to || 'Destination', body.shipmentID || 'SHIP-001'], identity);
-      } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: `Component ${id} shipped successfully`, txId: 'tx-' + Date.now() }));
+        const { output, txId } = await invokeChaincode(
+          'ShipComponent',
+          [
+            id,
+            body.from,
+            body.to,
+            body.shipmentID,
+            body.shipmentDate
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} shipped successfully`,
+          component,
+          txId
+        }));
+
+      } catch (err) {
+        console.error('Shipment failed:', err);
+
+        const msg = cleanFabricError(err);
+
+        let code = 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be shipped') ||
+          msg.includes('Missing required input')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/receive$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
+
       try {
-        await invokeChaincode('ReceiveComponent', [id, body.warehouse || identity, body.location || 'Warehouse-A'], identity);
-      } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: `Component ${id} received successfully`, txId: 'tx-' + Date.now() }));
+        const { output, txId } = await invokeChaincode(
+          'ReceiveComponent',
+          [
+            id,
+            body.location,
+            body.receivedDate
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} received successfully`,
+          component,
+          txId
+        }));
+
+      } catch (err) {
+        console.error('Receipt failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be received') ||
+          msg.includes('Missing required input')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/transfer$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
+
       try {
-        await invokeChaincode('TransferCustody', [id, body.from || identity, body.to || 'NewOwner', body.location || 'Location-B'], identity);
-      } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: `Component ${id} custody transferred successfully`, txId: 'tx-' + Date.now() }));
+        const { output, txId } = await invokeChaincode(
+          'TransferCustody',
+          [
+            id,
+            body.to,
+            body.location,
+            body.transferDate
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} custody transferred successfully`,
+          component,
+          txId
+        }));
+
+      } catch (err) {
+        console.error('Custody transfer failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be transferred') ||
+          msg.includes('Missing required input')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/assemble$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
+
       try {
-        await invokeChaincode('AssembleComponent', [id, body.assembler || identity, body.assemblyID || 'ASSY-001', body.location || 'Factory-Floor'], identity);
-      } catch {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, message: `Component ${id} assembled successfully`, txId: 'tx-' + Date.now() }));
+        const { output, txId } = await invokeChaincode(
+          'AssembleComponent',
+          [
+            id,
+            body.assemblyID,
+            body.location
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} assembled successfully`,
+          component,
+          txId
+        }));
+
+      } catch (err) {
+        console.error('Assembly failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be assembled') ||
+          msg.includes('Missing required input')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
     }
 
     if (req.method === 'GET' && pathname.match(/\/api\/components\/[^\/]+\/history$/)) {
       const id = decodeURIComponent(pathname.split('/')[3]);
+
       try {
-        const historyStr = await invokeChaincode('GetComponentHistory', [id], identity);
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          identity
+        );
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(historyStr);
-      } catch {
-        try {
-          const comp = await getComponentFromLedger(id, identity);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify([
-            {
-              txId: 'tx-genesis-' + id,
-              timestamp: comp.manufactureDate || new Date().toISOString(),
-              eventType: 'REGISTERED',
-              actor: comp.manufacturer || 'EVTech Manufacturing',
-              status: comp.status || 'MANUFACTURED',
-              details: comp,
-            }
-          ]));
-        } catch {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ error: `History not found for component: ${id}` }));
-        }
+      } catch (err) {
+        const msg = cleanFabricError(err);
+
+        const code = msg.includes('not found') ? 404 : 500;
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
       }
     }
 

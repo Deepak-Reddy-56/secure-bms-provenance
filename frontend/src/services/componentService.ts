@@ -167,10 +167,14 @@ export async function getComponentHistory(
  * Fetch aggregate system overview. Gracefully returns null if endpoint missing.
  */
 export async function getSystemOverview(
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  identityId?: string
 ): Promise<{ registeredCount: number } | null> {
   try {
-    return await api.get<{ registeredCount: number }>('/api/overview', signal);
+    return await apiWithIdentity(identityId).get<{ registeredCount: number }>(
+      '/api/overview',
+      signal
+    );
   } catch {
     return null;
   }

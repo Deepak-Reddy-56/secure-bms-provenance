@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useIdentity } from '../context/IdentityContext';
 import { useToast } from '../context/ToastContext';
 import { useComponentSearch, useRegistration } from '../hooks/useComponent';
@@ -54,10 +54,12 @@ function ConfirmModal({ title, componentID, actor, fromStatus, toStatus, fields,
             <span className="confirm-detail-label">Actor</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{actor}</span>
             {fields.map(f => (
-              <>
-                <span key={f.label + '-l'} className="confirm-detail-label">{f.label}</span>
-                <span key={f.label + '-v'} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>{f.value}</span>
-              </>
+              <Fragment key={f.label}>
+                <span className="confirm-detail-label">{f.label}</span>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
+                  {f.value}
+                </span>
+              </Fragment>
             ))}
           </div>
           {fromStatus && toStatus && (
@@ -114,19 +116,19 @@ type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'ass
 export function ComponentsPage() {
   const { identity, permissions } = useIdentity();
   const { addToast } = useToast();
-  const search      = useComponentSearch();
+  const search = useComponentSearch();
   const registration = useRegistration();
-  const action       = useLifecycleAction();
+  const action = useLifecycleAction();
 
-  const [searchInput,  setSearchInput]  = useState('');
-  const [activeTab,    setActiveTab]    = useState<ActionTab>(
+  const [searchInput, setSearchInput] = useState('');
+  const [activeTab, setActiveTab] = useState<ActionTab>(
     permissions.canRegister ? 'register' :
-    permissions.canCertify  ? 'certify'  :
-    permissions.canShip     ? 'ship'     :
-    permissions.canReceive  ? 'receive'  :
-    permissions.canAssemble ? 'assemble' : 'register'
+      permissions.canCertify ? 'certify' :
+        permissions.canShip ? 'ship' :
+          permissions.canReceive ? 'receive' :
+            permissions.canAssemble ? 'assemble' : 'register'
   );
-  const [confirmData,  setConfirmData]  = useState<null | (() => void)>(null);
+  const [confirmData, setConfirmData] = useState<null | (() => void)>(null);
   const [confirmProps, setConfirmProps] = useState<Omit<ConfirmModalProps, 'onConfirm' | 'onCancel' | 'loading'> | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
@@ -177,12 +179,12 @@ export function ComponentsPage() {
   // ── Tab definitions ───────────────────────────────────────────
 
   const tabs: { id: ActionTab; label: string; allowed: boolean }[] = ([
-    { id: 'register' as ActionTab, label: 'Register',         allowed: permissions.canRegister  },
-    { id: 'certify' as ActionTab,  label: 'Certify',           allowed: permissions.canCertify   },
-    { id: 'ship' as ActionTab,     label: 'Ship',              allowed: permissions.canShip      },
-    { id: 'receive' as ActionTab,  label: 'Receive',           allowed: permissions.canReceive   },
-    { id: 'transfer' as ActionTab, label: 'Transfer Custody',  allowed: permissions.canTransfer  },
-    { id: 'assemble' as ActionTab, label: 'Assemble',          allowed: permissions.canAssemble  },
+    { id: 'register' as ActionTab, label: 'Register', allowed: permissions.canRegister },
+    { id: 'certify' as ActionTab, label: 'Certify', allowed: permissions.canCertify },
+    { id: 'ship' as ActionTab, label: 'Ship', allowed: permissions.canShip },
+    { id: 'receive' as ActionTab, label: 'Receive', allowed: permissions.canReceive },
+    { id: 'transfer' as ActionTab, label: 'Transfer Custody', allowed: permissions.canTransfer },
+    { id: 'assemble' as ActionTab, label: 'Assemble', allowed: permissions.canAssemble },
   ] as const).filter(t => t.allowed);
 
   const isAuditor = identity.role === 'AUDITOR';
@@ -239,10 +241,10 @@ export function ComponentsPage() {
             </div>
             <div className="verify-result-grid">
               {[
-                { label: 'Manufacturer',       value: search.component.manufacturer },
+                { label: 'Manufacturer', value: search.component.manufacturer },
                 { label: 'Manufacturing Date', value: search.component.manufactureDate },
-                { label: 'Location',           value: search.component.location },
-                { label: 'Current Status',     value: search.component.status },
+                { label: 'Location', value: search.component.location },
+                { label: 'Current Status', value: search.component.status },
               ].map(cell => (
                 <div key={cell.label} className="verify-result-cell">
                   <div className="verify-result-cell-label">{cell.label}</div>
@@ -365,7 +367,13 @@ export function ComponentsPage() {
                 <div className="tx-error" style={{ marginBottom: 'var(--space-5)' }} role="alert">
                   <div className="tx-error-header">
                     <span aria-hidden="true">✕</span>
-                    {action.isUnauthorized ? 'Unauthorized Action' : action.isInvalidState ? 'Invalid Lifecycle State' : 'Operation Failed'}
+                    {action.errorMessage === 'Component already assembled.'
+  ? 'Component Already Assembled'
+  : action.isUnauthorized
+    ? 'Unauthorized Action'
+    : action.isInvalidState
+      ? 'Invalid Lifecycle State'
+      : 'Operation Failed'}
                   </div>
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-3)' }}>
                     {action.errorMessage}
@@ -457,14 +465,26 @@ export function ComponentsPage() {
 
                   {/* ── Certify ── */}
                   {activeTab === 'certify' && permissions.canCertify && (
-                    <form onSubmit={e => { e.preventDefault();
+                    <form onSubmit={e => {
+                      e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
+                      const currentStatus = search.component?.status;
+
+if (currentStatus === 'ASSEMBLED') {
+  return;
+}
+
+if (currentStatus !== 'TRANSFERRED') {
+  return;
+}
                       openConfirm({
                         title: 'Certify Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'MANUFACTURED', toStatus: 'CERTIFIED',
                         fields: [{ label: 'Certificate ID', value: cert.certificateID }, { label: 'Compliance', value: cert.complianceReference }],
                       }, () => action.execute(sig => certifyComponent(activeID, cert, sig, identity.id))
-                        .then(() => handleSuccess(`Component ${activeID} certified successfully`)));
+                        .then( success => {if (success){handleSuccess(`Component ${activeID} certified successfully`);
+                      }
+                    }));
                     }}>
                       <div className="form-grid">
                         <div className="form-group full-width">
@@ -480,25 +500,38 @@ export function ComponentsPage() {
                           onChange={v => setCert(p => ({ ...p, complianceReference: v }))} placeholder="ISO/EV-BMS-001" />
                       </div>
                       <div style={{ marginTop: 'var(--space-5)' }}>
-                        <button type="submit" className="btn btn-primary" id="btn-certify"
-                          disabled={!cert.certificateID || !cert.complianceReference}>
-                          Certify Component
-                        </button>
+                        <button
+  type="submit"
+  className="btn btn-primary"
+  id="btn-assemble"
+  disabled={
+    !assy.assemblyID ||
+    !assy.location ||
+    !search.component ||
+    search.component.status !== 'TRANSFERRED'
+  }
+>
+  Assemble Component
+</button>
                       </div>
                     </form>
                   )}
 
                   {/* ── Ship ── */}
                   {activeTab === 'ship' && permissions.canShip && (
-                    <form onSubmit={e => { e.preventDefault();
+                    <form onSubmit={e => {
+                      e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
                         title: 'Ship Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
                         fields: [{ label: 'From', value: ship.from }, { label: 'To', value: ship.to }, { label: 'Shipment ID', value: ship.shipmentID }],
                       }, () => action.execute(sig => shipComponent(activeID, ship, sig, identity.id))
-                        .then(() => handleSuccess(`Component ${activeID} shipped`)));
+                        .then(success => {if(success){handleSuccess(`Component ${activeID} shipped`);
+                        }
+                      }));
                     }}>
+
                       <div className="form-grid">
                         <div className="form-group full-width">
                           <label className="form-label">Component ID</label>
@@ -520,14 +553,18 @@ export function ComponentsPage() {
 
                   {/* ── Receive ── */}
                   {activeTab === 'receive' && permissions.canReceive && (
-                    <form onSubmit={e => { e.preventDefault();
+                    <form onSubmit={e => {
+                      e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
                         title: 'Receive Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'SHIPPED', toStatus: 'RECEIVED',
                         fields: [{ label: 'Warehouse', value: recv.warehouse }, { label: 'Location', value: recv.location }],
                       }, () => action.execute(sig => receiveComponent(activeID, recv, sig, identity.id))
-                        .then(() => handleSuccess(`Component ${activeID} received`)));
+                        .then(success => { if(success){handleSuccess(`Component ${activeID} received`);
+                      }
+                    }));
+
                     }}>
                       <div className="form-grid">
                         <div className="form-group full-width">
@@ -539,21 +576,25 @@ export function ComponentsPage() {
                         <Field id="recv-date" label="Received Date" type="date" value={recv.receivedDate} onChange={v => setRecv(p => ({ ...p, receivedDate: v }))} />
                       </div>
                       <div style={{ marginTop: 'var(--space-5)' }}>
-                        <button type="submit" className="btn btn-primary" id="btn-receive" disabled={!recv.location}>Receive Component</button>
+                        <button type="submit" className="btn btn-primary" id="btn-receive" disabled={!recv.location || !search.component ||
+  search.component.status !== 'SHIPPED'}>Receive Component</button>
                       </div>
                     </form>
                   )}
 
                   {/* ── Transfer ── */}
                   {activeTab === 'transfer' && permissions.canTransfer && (
-                    <form onSubmit={e => { e.preventDefault();
+                    <form onSubmit={e => {
+                      e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
                         title: 'Transfer Custody', componentID: activeID, actor: identity.id,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
                         fields: [{ label: 'From', value: xfr.from }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
                       }, () => action.execute(sig => transferCustody(activeID, xfr, sig, identity.id))
-                        .then(() => handleSuccess(`Custody transferred for ${activeID}`)));
+                        .then(success => {if(success){handleSuccess(`Custody transferred for ${activeID}`);
+                      }
+                    }));
                     }}>
                       <div className="form-grid">
                         <div className="form-group full-width">
@@ -573,14 +614,17 @@ export function ComponentsPage() {
 
                   {/* ── Assemble ── */}
                   {activeTab === 'assemble' && permissions.canAssemble && (
-                    <form onSubmit={e => { e.preventDefault();
+                    <form onSubmit={e => {
+                      e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
                         title: 'Assemble Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
                         fields: [{ label: 'Assembler', value: assy.assembler }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
                       }, () => action.execute(sig => assembleComponent(activeID, assy, sig, identity.id))
-                        .then(() => handleSuccess(`Component ${activeID} assembled`)));
+                        .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
+                      }
+                    }));
                     }}>
                       <div className="form-grid">
                         <div className="form-group full-width">

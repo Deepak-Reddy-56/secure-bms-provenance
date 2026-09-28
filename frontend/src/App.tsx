@@ -1,45 +1,89 @@
 import { useState, useEffect } from 'react';
-import { IdentityProvider } from './context/IdentityContext';
+import { IdentityProvider, useIdentity } from './context/IdentityContext';
+import { useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppShell } from './components/AppShell/AppShell';
 import type { Page } from './components/AppShell/AppShell';
 import { useNetworkStatus } from './hooks/useComponent';
-import { OverviewPage }   from './pages/OverviewPage';
+import { OverviewPage } from './pages/OverviewPage';
 import { ComponentsPage } from './pages/ComponentsPage';
-import { LifecyclePage }  from './pages/LifecyclePage';
+import { LifecyclePage } from './pages/LifecyclePage';
 import { ProvenancePage } from './pages/ProvenancePage';
-import { AuditPage }      from './pages/AuditPage';
-import { NetworkPage }    from './pages/NetworkPage';
+import { AuditPage } from './pages/AuditPage';
+import { NetworkPage } from './pages/NetworkPage';
+import { LoginPage } from './pages/LoginPage';
 
 const PAGE_TITLES: Record<Page, string> = {
-  overview:    'Component Provenance',
-  components:  'Component Verification',
-  lifecycle:   'Component Lifecycle',
-  provenance:  'Provenance History',
-  audit:       'Audit Log',
-  network:     'Network Status',
-  settings:    'Settings',
+  overview: 'Component Provenance',
+  components: 'Component Verification',
+  lifecycle: 'Component Lifecycle',
+  provenance: 'Provenance History',
+  audit: 'Audit Log',
+  network: 'Network Status',
+  settings: 'Settings',
 };
 
 function AppInner() {
   const [currentPage, setCurrentPage] = useState<Page>('overview');
+
+  const { fabricIdentity } = useAuth();
+  const { setIdentityById } = useIdentity();
+
   const { status, health, refresh } = useNetworkStatus();
+
+  // Synchronize the Fabric identity assigned by the backend.
+  useEffect(() => {
+    if (fabricIdentity) {
+      setIdentityById(fabricIdentity);
+    }
+  }, [fabricIdentity, setIdentityById]);
 
   useEffect(() => {
     refresh();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh]);
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'overview':    return <OverviewPage   networkStatus={status} onNavigate={setCurrentPage} />;
-      case 'components':  return <ComponentsPage />;
-      case 'lifecycle':   return <LifecyclePage />;
-      case 'provenance':  return <ProvenancePage />;
-      case 'audit':       return <AuditPage />;
-      case 'network':     return <NetworkPage networkStatus={status} health={health} />;
-      case 'settings':    return <div className="empty-state"><p className="empty-state-title">Settings</p><p className="empty-state-desc">Configuration options for the provenance platform.</p></div>;
-      default:            return null;
+      case 'overview':
+        return (
+          <OverviewPage
+            networkStatus={status}
+            onNavigate={setCurrentPage}
+          />
+        );
+
+      case 'components':
+        return <ComponentsPage />;
+
+      case 'lifecycle':
+        return <LifecyclePage />;
+
+      case 'provenance':
+        return <ProvenancePage />;
+
+      case 'audit':
+        return <AuditPage />;
+
+      case 'network':
+        return (
+          <NetworkPage
+            networkStatus={status}
+            health={health}
+          />
+        );
+
+      case 'settings':
+        return (
+          <div className="empty-state">
+            <p className="empty-state-title">Settings</p>
+            <p className="empty-state-desc">
+              Configuration options for the provenance platform.
+            </p>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
@@ -55,11 +99,38 @@ function AppInner() {
   );
 }
 
+function AuthGate() {
+  const {
+    authenticated,
+    loading,
+  } = useAuth();
+
+  if (loading) {
+    return (
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
+        <p>Loading authentication...</p>
+      </main>
+    );
+  }
+
+  if (!authenticated) {
+    return <LoginPage />;
+  }
+
+  return <AppInner />;
+}
+
 export default function App() {
   return (
     <IdentityProvider>
       <ToastProvider>
-        <AppInner />
+        <AuthGate />
       </ToastProvider>
     </IdentityProvider>
   );

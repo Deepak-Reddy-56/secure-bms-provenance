@@ -12,7 +12,7 @@ interface UseLifecycleActionReturn {
   errorMessage: string | null;
   isUnauthorized: boolean;
   isInvalidState: boolean;
-  execute: (fn: (signal: AbortSignal) => Promise<LifecycleActionResult>) => Promise<void>;
+  execute: (fn: (signal: AbortSignal) => Promise<LifecycleActionResult>) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -40,6 +40,7 @@ export function useLifecycleAction(): UseLifecycleActionReturn {
       const res = await fn(abortRef.current.signal);
       setResult(res);
       setState('success');
+      return true;
     } catch (err) {
       if (err instanceof ApiError) {
         const isAuth   = err.statusCode === 401 || err.statusCode === 403;
@@ -48,11 +49,12 @@ export function useLifecycleAction(): UseLifecycleActionReturn {
         setIsInvalidState(isState);
         setErrorMessage(humanizeError(err));
       } else if (err instanceof Error && err.name === 'AbortError') {
-        return;
+        return false;
       } else {
         setErrorMessage('An unexpected error occurred. Please try again.');
       }
       setState('error');
+      return false;
     }
   }, []);
 
@@ -122,19 +124,107 @@ export function useProvenanceHistory(): UseProvenanceHistoryReturn {
 function humanizeError(err: ApiError): string {
   const { statusCode, message } = err;
 
-  // Already has a good message from the backend — use it
-  if (message && message !== `Request failed with status ${statusCode}`) {
-    return message;
+  // Fabric Gateway wraps chaincode errors inside endorsement errors.
+  const fabricMessage =
+    message?.match(/message:"([^"]+)"/)?.[1];
+
+  const cleanMessage = (fabricMessage || message || '').replace(
+    /^Error:\s*/,
+    ''
+  );
+
+  // Specific lifecycle messages
+  if (
+    cleanMessage === 'Component already assembled.' ||
+    cleanMessage.includes(
+      'Component cannot be assembled. Current status: ASSEMBLED'
+    )
+  ) {
+    return 'Component already assembled.';
+  }
+
+  if (
+    cleanMessage.includes(
+      'Component cannot be received. Current status: ASSEMBLED'
+    )
+  ) {
+    return 'Component already received and assembled.';
+  }
+
+  if (
+    cleanMessage === 'Component already certified.' ||
+    cleanMessage.includes('Component already certified')
+  ) {
+    return 'Component already certified.';
+  }
+
+  if (
+    cleanMessage.includes(
+      'Component cannot be received. Current status: RECEIVED'
+    )
+  ) {
+    return 'Component already received.';
+  }
+
+  if (
+    cleanMessage.includes(
+      'Component cannot be transferred. Current status: TRANSFERRED'
+    )
+  ) {
+    return 'Component already transferred.';
+  }
+
+  if (
+    cleanMessage.includes(
+      'Component cannot be transferred. Current status: ASSEMBLED'
+    )
+  ) {
+    return 'Component already transferred and assembled.';
+  }
+
+  if (
+    cleanMessage.includes(
+      'Component cannot be shipped. Current status: SHIPPED'
+    )
+  ) {
+    return 'Component already shipped.';
+  }
+
+  if (cleanMessage.includes('Unauthorized role')) {
+    return 'Unauthorized role.';
+  }
+
+  if (cleanMessage.includes('Component already exists')) {
+    return 'Component already exists.';
+  }
+
+  if (cleanMessage.includes('Component not found')) {
+    return 'Component not found.';
+  }
+
+  if (
+    cleanMessage &&
+    cleanMessage !== `Request failed with status ${statusCode}`
+  ) {
+    return cleanMessage;
   }
 
   switch (statusCode) {
-    case 0:   return 'Unable to reach the provenance service. Check your connection.';
-    case 400: return 'Validation error — please check your inputs.';
-    case 401: return 'Authentication required. You are not logged in.';
-    case 403: return 'You are not authorized to perform this operation.';
-    case 404: return 'Component not found.';
-    case 409: return 'This lifecycle operation is not valid for the component\'s current state.';
-    case 500: return 'An internal server error occurred. Please try again later.';
-    default:  return `Request failed (status ${statusCode}).`;
+    case 0:
+      return 'Unable to reach the provenance service. Check your connection.';
+    case 400:
+      return 'Validation error — please check your inputs.';
+    case 401:
+      return 'Authentication required. You are not logged in.';
+    case 403:
+      return 'You are not authorized to perform this operation.';
+    case 404:
+      return 'Component not found.';
+    case 409:
+      return 'This lifecycle operation is not valid for the component\'s current state.';
+    case 500:
+      return 'An internal server error occurred. Please try again later.';
+    default:
+      return `Request failed (status ${statusCode}).`;
   }
 }

@@ -1,3 +1,4 @@
+import { useIdentity } from '../context/IdentityContext';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   registerComponent,
@@ -157,15 +158,22 @@ interface UseSystemOverviewReturn {
 }
 
 export function useSystemOverview(): UseSystemOverviewReturn {
+  const { identity } = useIdentity();
+
   const [registeredCount, setRegisteredCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const overview = await getSystemOverview();
+
+    const overview = await getSystemOverview(
+      undefined,
+      identity.id
+    );
+
     setRegisteredCount(overview?.registeredCount ?? null);
     setLoading(false);
-  }, []);
+  }, [identity.id]);
 
   return { registeredCount, loading, refresh };
 }

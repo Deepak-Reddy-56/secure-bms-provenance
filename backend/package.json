@@ -8,10 +8,11 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@hyperledger/fabric-gateway": "^1.7.0",
     "@grpc/grpc-js": "^1.12.0",
+    "@hyperledger/fabric-gateway": "^1.7.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "google-auth-library": "^10.9.1"
   }
 }
