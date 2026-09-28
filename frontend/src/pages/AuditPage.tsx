@@ -23,7 +23,7 @@ function eventActor(event: ProvenanceEvent): string {
 }
 
 export function AuditPage() {
-  const history = useProvenanceHistory();
+  const history = useProvenanceHistory('/api/auditor/components');
 
   const [searchInput,    setSearchInput]    = useState('');
   const [loadedID,       setLoadedID]       = useState('');
