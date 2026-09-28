@@ -2,10 +2,10 @@ const { exec } = require('child_process');
 
 const CHANNEL_NAME = process.env.FABRIC_CHANNEL || 'mychannel';
 const CHAINCODE_NAME = process.env.FABRIC_CHAINCODE || 'bmsprovenance';
-const DEFAULT_IDENTITY = 'manufacturer1';
+const HEALTH_IDENTITY = 'auditor1';
 
 // Helper function to execute WSL peer CLI commands cleanly
-function execWSLPeer(command, identity = DEFAULT_IDENTITY) {
+function execWSLPeer(command, identity) {
   return new Promise((resolve, reject) => {
     const identityMap = {
       manufacturer1: 'manufacturer1@org1.example.com',
@@ -15,6 +15,10 @@ function execWSLPeer(command, identity = DEFAULT_IDENTITY) {
       assembler1: 'assembler1@org1.example.com',
       auditor1: 'auditor1@org1.example.com',
     };
+
+    if (!identity) {
+      return reject(new Error('Fabric identity is required.'));
+    }
 
     if (!identityMap[identity]) {
       return reject(
@@ -58,7 +62,7 @@ async function checkFabricConnection() {
     // 1. Query committed chaincode definition on channel
 const output = await execWSLPeer(
   `/home/deepak/fabric/fabric-samples/bin/peer lifecycle chaincode querycommitted -C ${CHANNEL_NAME}`,
-  DEFAULT_IDENTITY
+  HEALTH_IDENTITY
 );
 
     if (output.includes(CHAINCODE_NAME)) {
@@ -66,7 +70,7 @@ const output = await execWSLPeer(
         connected: true,
         network: CHANNEL_NAME,
         chaincode: CHAINCODE_NAME,
-        identity: DEFAULT_IDENTITY,
+        identity: HEALTH_IDENTITY,
         details: {
           peer: 'peer0.org1.example.com:7051',
           mspId: 'Org1MSP',
@@ -102,7 +106,7 @@ function formatChaincodeArgs(fcn, argsArray = []) {
 /**
  * Create a component on the Fabric ledger by invoking CreateComponent smart contract method.
  */
-async function createComponentOnLedger({ componentID, componentType, manufacturer, manufactureDate, location }, identity = DEFAULT_IDENTITY) {
+async function createComponentOnLedger({ componentID, componentType, manufacturer, manufactureDate, location }, identity) {
   const cArg = formatChaincodeArgs('CreateComponent', [componentID, componentType, manufacturer, manufactureDate, location]);
 
   const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile /home/deepak/fabric/fabric-samples/test-network/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} --peerAddresses localhost:7051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses localhost:9051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt -c ${cArg}`;
@@ -133,7 +137,7 @@ async function createComponentOnLedger({ componentID, componentType, manufacture
 /**
  * Retrieve a component from the Fabric ledger by querying GetComponent smart contract method.
  */
-async function getComponentFromLedger(componentID, identity = DEFAULT_IDENTITY) {
+async function getComponentFromLedger(componentID, identity) {
   const cArg = formatChaincodeArgs('GetComponent', [componentID]);
 
   const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode query -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} -c ${cArg}`;
@@ -154,7 +158,7 @@ async function getComponentFromLedger(componentID, identity = DEFAULT_IDENTITY) 
 /**
  * Generic chaincode invoke / query helper for Day 2 operations.
  */
-async function invokeChaincode(fcn, argsArray, identity = DEFAULT_IDENTITY) {
+async function invokeChaincode(fcn, argsArray, identity) {
   const cArg = formatChaincodeArgs(fcn, argsArray);
 
   const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile /home/deepak/fabric/fabric-samples/test-network/organizations/ordererOrganizations/example.com/tlsca/tlsca.example.com-cert.pem -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} --peerAddresses localhost:7051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses localhost:9051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt --waitForEvent --waitForEventTimeout 30s -c ${cArg}`;
@@ -177,7 +181,7 @@ return {
 /**
  * Query a chaincode method without creating a ledger transaction.
  */
-async function queryChaincode(fcn, argsArray, identity = DEFAULT_IDENTITY) {
+async function queryChaincode(fcn, argsArray, identity) {
   const cArg = formatChaincodeArgs(fcn, argsArray);
 
   const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode query -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} -c ${cArg}`;
@@ -185,7 +189,7 @@ async function queryChaincode(fcn, argsArray, identity = DEFAULT_IDENTITY) {
   return await execWSLPeer(cmd, identity);
 }
 
-async function getLatestTransactionId(componentID, identity = DEFAULT_IDENTITY) {
+async function getLatestTransactionId(componentID, identity) {
   const historyOutput = await queryChaincode(
     'GetComponentHistory',
     [componentID],
