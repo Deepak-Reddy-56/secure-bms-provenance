@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { UserRole } from '../types/identity';
 
 export interface GoogleAuthUser {
   email: string | null;
@@ -9,7 +10,9 @@ export interface GoogleAuthUser {
 export interface GoogleAuthResponse {
   authenticated: boolean;
   user: GoogleAuthUser;
-  fabricIdentity: string;
+  role: UserRole | null;
+  fabricIdentity: string | null;
+  isAdmin: boolean;
 }
 
 export interface GoogleProvisioningResponse {
@@ -20,6 +23,14 @@ export interface GoogleProvisioningResponse {
   name: string | null;
 }
 
+export interface CurrentSessionResponse {
+  authenticated: boolean;
+  user: GoogleAuthUser;
+  role: UserRole | null;
+  fabricIdentity: string | null;
+  isAdmin: boolean;
+}
+
 export async function authenticateWithGoogle(
   idToken: string
 ): Promise<GoogleAuthResponse> {
@@ -27,6 +38,14 @@ export async function authenticateWithGoogle(
     '/api/auth/google',
     { idToken }
   );
+}
+
+export async function getCurrentSession(): Promise<CurrentSessionResponse> {
+  return api.get<CurrentSessionResponse>('/api/auth/me');
+}
+
+export async function logoutFromServer(): Promise<void> {
+  await api.post('/api/auth/logout', {});
 }
 
 export function isProvisioningResponse(
