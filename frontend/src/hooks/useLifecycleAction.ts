@@ -76,7 +76,7 @@ interface UseProvenanceHistoryReturn {
   events: ProvenanceEvent[];
   loading: boolean;
   errorMessage: string | null;
-  fetch: (componentID: string, identityId?: string) => Promise<void>;
+  fetch: (componentID: string) => Promise<void>;
   clear: () => void;
 }
 
@@ -86,7 +86,7 @@ export function useProvenanceHistory(): UseProvenanceHistoryReturn {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetch = useCallback(async (componentID: string, identityId?: string) => {
+  const fetch = useCallback(async (componentID: string) => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -95,7 +95,7 @@ export function useProvenanceHistory(): UseProvenanceHistoryReturn {
     setEvents([]);
 
     try {
-      const history = await getComponentHistory(componentID, abortRef.current.signal, identityId);
+      const history = await getComponentHistory(componentID, abortRef.current.signal);
       setEvents(history);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
