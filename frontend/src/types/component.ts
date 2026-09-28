@@ -39,7 +39,6 @@ export interface CertifyComponentPayload {
 }
 
 export interface ShipComponentPayload {
-  transporter: string;
   from: string;
   to: string;
   shipmentID: string;
@@ -47,20 +46,17 @@ export interface ShipComponentPayload {
 }
 
 export interface ReceiveComponentPayload {
-  warehouse: string;
   location: string;
   receivedDate: string;
 }
 
 export interface TransferCustodyPayload {
-  from: string;
   to: string;
   location: string;
   transferDate: string;
 }
 
 export interface AssembleComponentPayload {
-  assembler: string;
   assemblyID: string;
   location: string;
 }

@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import type { ReactNode } from 'react';
 import type {
   CertifyComponentPayload,
@@ -34,7 +35,7 @@ function FormField({
 }: {
   id: string; label: string; type?: string; value: string;
   onChange: (v: string) => void; placeholder?: string;
-  disabled?: boolean; required?: boolean;
+  disabled?: boolean; readOnly?: boolean; required?: boolean;
 }) {
   return (
     <div className="form-group">
@@ -49,6 +50,7 @@ function FormField({
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        readOnly={readOnly}
         required={required}
         aria-required={required}
       />
@@ -63,14 +65,16 @@ interface TxResultPanelProps {
   isUnauthorized: boolean;
   isInvalidState: boolean;
   operation: string;
-  identityId: string;
   onReset: () => void;
 }
 
 export function TxResultPanel({
   state, result, errorMessage, isUnauthorized, isInvalidState,
-  operation, identityId, onReset,
+  operation, onReset,
 }: TxResultPanelProps) {
+  const { fabricIdentity } = useAuth();
+  const actor = fabricIdentity ?? 'Unavailable';
+
   if (state === 'success' && result) {
     return (
       <div className="tx-result success" role="alert" aria-live="polite">
@@ -88,7 +92,7 @@ export function TxResultPanel({
           </div>
           <div className="tx-result-field">
             <span className="tx-result-label">Actor</span>
-            <span className="tx-result-value mono">{identityId}</span>
+            <span className="tx-result-value mono">{actor}</span>
           </div>
           <div className="tx-result-field">
             <span className="tx-result-label">New Status</span>
@@ -116,7 +120,7 @@ export function TxResultPanel({
           <div className="tx-result-fields">
             <div className="tx-result-field">
               <span className="tx-result-label">Identity</span>
-              <span className="tx-result-value mono">{identityId}</span>
+              <span className="tx-result-value mono">{actor}</span>
             </div>
             <div className="tx-result-field">
               <span className="tx-result-label">Reason</span>
@@ -156,7 +160,7 @@ export function TxResultPanel({
 
 function ActionFormWrapper({
   title, children, state, result, errorMessage, isUnauthorized, isInvalidState,
-  operation, identityId, onReset,
+  operation, onReset,
 }: {
   title: ReactNode;
   children: ReactNode;
@@ -166,7 +170,6 @@ function ActionFormWrapper({
   isUnauthorized: boolean;
   isInvalidState: boolean;
   operation: string;
-  identityId: string;
   onReset: () => void;
 }) {
   const hasResult = state === 'success' || state === 'error';
@@ -176,7 +179,7 @@ function ActionFormWrapper({
         <TxResultPanel
           state={state} result={result} errorMessage={errorMessage}
           isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-          operation={operation} identityId={identityId} onReset={onReset}
+          operation={operation} onReset={onReset}
         />
       ) : (
         <>
@@ -192,7 +195,6 @@ function ActionFormWrapper({
 
 interface CertifyFormProps {
   componentID: string;
-  identityId: string;
   state: ActionState;
   result: LifecycleActionResult | null;
   errorMessage: string | null;
@@ -203,9 +205,10 @@ interface CertifyFormProps {
 }
 
 export function CertifyForm({
-  componentID, identityId, state, result, errorMessage,
+  componentID, state, result, errorMessage,
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: CertifyFormProps) {
+  const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
   const [certificateID,       setCertificateID]       = useState('');
   const [certificationDate,   setCertificationDate]   = useState(today);
@@ -222,11 +225,12 @@ export function CertifyForm({
     <ActionFormWrapper
       title={null} state={state} result={result} errorMessage={errorMessage}
       isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-      operation="Component Certification" identityId={identityId} onReset={onReset}
+      operation="Component Certification" onReset={onReset}
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Certify component form">
         <div className="action-form-grid">
           <FormField id="cert-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
+          <FormField id="cert-certifier" label="Certifier" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
           <FormField id="cert-certificate-id" label="Certificate ID" value={certificateID}
             onChange={setCertificateID} placeholder="CERT-BMS-001" disabled={isSubmitting} />
           <FormField id="cert-date" label="Certification Date" type="date" value={certificationDate}
@@ -253,7 +257,6 @@ export function CertifyForm({
 
 interface ShipFormProps {
   componentID: string;
-  identityId: string;
   state: ActionState;
   result: LifecycleActionResult | null;
   errorMessage: string | null;
@@ -264,11 +267,11 @@ interface ShipFormProps {
 }
 
 export function ShipForm({
-  componentID, identityId, state, result, errorMessage,
+  componentID, state, result, errorMessage,
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: ShipFormProps) {
+  const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [transporter,   setTransporter]   = useState(identityId);
   const [from,          setFrom]          = useState('');
   const [to,            setTo]            = useState('');
   const [shipmentID,    setShipmentID]    = useState('');
@@ -278,19 +281,19 @@ export function ShipForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ transporter, from, to, shipmentID, shipmentDate });
+    onSubmit({ from, to, shipmentID, shipmentDate });
   };
 
   return (
     <ActionFormWrapper
       title={null} state={state} result={result} errorMessage={errorMessage}
       isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-      operation="Component Shipment" identityId={identityId} onReset={onReset}
+      operation="Component Shipment" onReset={onReset}
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Ship component form">
         <div className="action-form-grid">
           <FormField id="ship-component-id" label="Component ID"  value={componentID}  onChange={() => {}} disabled />
-          <FormField id="ship-transporter"  label="Transporter"   value={transporter}  onChange={setTransporter}  disabled={isSubmitting} />
+          <FormField id="ship-transporter"  label="Transporter"   value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
           <FormField id="ship-from"         label="From Location" value={from}         onChange={setFrom}         placeholder="Bengaluru" disabled={isSubmitting} />
           <FormField id="ship-to"           label="To Location"   value={to}           onChange={setTo}           placeholder="Mysuru" disabled={isSubmitting} />
           <FormField id="ship-id"           label="Shipment ID"   value={shipmentID}   onChange={setShipmentID}   placeholder="SHIP-001" disabled={isSubmitting} />
@@ -315,7 +318,6 @@ export function ShipForm({
 
 interface ReceiveFormProps {
   componentID: string;
-  identityId: string;
   state: ActionState;
   result: LifecycleActionResult | null;
   errorMessage: string | null;
@@ -326,11 +328,11 @@ interface ReceiveFormProps {
 }
 
 export function ReceiveForm({
-  componentID, identityId, state, result, errorMessage,
+  componentID, state, result, errorMessage,
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: ReceiveFormProps) {
+  const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [warehouse,     setWarehouse]     = useState(identityId);
   const [location,      setLocation]      = useState('');
   const [receivedDate,  setReceivedDate]  = useState(today);
 
@@ -338,19 +340,19 @@ export function ReceiveForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ warehouse, location, receivedDate });
+    onSubmit({ location, receivedDate });
   };
 
   return (
     <ActionFormWrapper
       title={null} state={state} result={result} errorMessage={errorMessage}
       isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-      operation="Component Receipt" identityId={identityId} onReset={onReset}
+      operation="Component Receipt" onReset={onReset}
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Receive component form">
         <div className="action-form-grid">
           <FormField id="recv-component-id" label="Component ID"  value={componentID}  onChange={() => {}} disabled />
-          <FormField id="recv-warehouse"    label="Warehouse"     value={warehouse}    onChange={setWarehouse}    disabled={isSubmitting} />
+          <FormField id="recv-warehouse"    label="Warehouse"     value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
           <FormField id="recv-location"     label="Location"      value={location}     onChange={setLocation}     placeholder="Mysuru" disabled={isSubmitting} />
           <FormField id="recv-date"         label="Received Date" type="date" value={receivedDate} onChange={setReceivedDate} disabled={isSubmitting} />
         </div>
@@ -373,7 +375,6 @@ export function ReceiveForm({
 
 interface TransferFormProps {
   componentID: string;
-  identityId: string;
   state: ActionState;
   result: LifecycleActionResult | null;
   errorMessage: string | null;
@@ -384,11 +385,11 @@ interface TransferFormProps {
 }
 
 export function TransferForm({
-  componentID, identityId, state, result, errorMessage,
+  componentID, state, result, errorMessage,
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: TransferFormProps) {
+  const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [from,          setFrom]          = useState(identityId);
   const [to,            setTo]            = useState('');
   const [location,      setLocation]      = useState('');
   const [transferDate,  setTransferDate]  = useState(today);
@@ -397,19 +398,19 @@ export function TransferForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ from, to, location, transferDate });
+    onSubmit({ to, location, transferDate });
   };
 
   return (
     <ActionFormWrapper
       title={null} state={state} result={result} errorMessage={errorMessage}
       isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-      operation="Custody Transfer" identityId={identityId} onReset={onReset}
+      operation="Custody Transfer" onReset={onReset}
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Transfer custody form">
         <div className="action-form-grid">
           <FormField id="xfr-component-id" label="Component ID"    value={componentID} onChange={() => {}} disabled />
-          <FormField id="xfr-from"         label="From"            value={from}        onChange={setFrom}        disabled={isSubmitting} />
+          <FormField id="xfr-from"         label="From"            value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
           <FormField id="xfr-to"           label="To"              value={to}          onChange={setTo}          placeholder="assembler1" disabled={isSubmitting} />
           <FormField id="xfr-location"     label="Location"        value={location}    onChange={setLocation}    placeholder="Mysuru" disabled={isSubmitting} />
           <FormField id="xfr-date"         label="Transfer Date"   type="date" value={transferDate} onChange={setTransferDate} disabled={isSubmitting} />
@@ -433,7 +434,6 @@ export function TransferForm({
 
 interface AssembleFormProps {
   componentID: string;
-  identityId: string;
   state: ActionState;
   result: LifecycleActionResult | null;
   errorMessage: string | null;
@@ -444,10 +444,10 @@ interface AssembleFormProps {
 }
 
 export function AssembleForm({
-  componentID, identityId, state, result, errorMessage,
+  componentID, state, result, errorMessage,
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: AssembleFormProps) {
-  const [assembler,   setAssembler]   = useState(identityId);
+  const { fabricIdentity } = useAuth();
   const [assemblyID,  setAssemblyID]  = useState('');
   const [location,    setLocation]    = useState('');
 
@@ -455,19 +455,19 @@ export function AssembleForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ assembler, assemblyID, location });
+    onSubmit({ assemblyID, location });
   };
 
   return (
     <ActionFormWrapper
       title={null} state={state} result={result} errorMessage={errorMessage}
       isUnauthorized={isUnauthorized} isInvalidState={isInvalidState}
-      operation="Component Assembly" identityId={identityId} onReset={onReset}
+      operation="Component Assembly" onReset={onReset}
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Assemble component form">
         <div className="action-form-grid">
           <FormField id="assy-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
-          <FormField id="assy-assembler"    label="Assembler"    value={assembler}   onChange={setAssembler}   disabled={isSubmitting} />
+          <FormField id="assy-assembler"    label="Assembler"    value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
           <FormField id="assy-id"           label="Assembly ID"  value={assemblyID}  onChange={setAssemblyID}  placeholder="ASSY-001" disabled={isSubmitting} />
           <FormField id="assy-location"     label="Location"     value={location}    onChange={setLocation}    placeholder="Mysuru" disabled={isSubmitting} />
         </div>

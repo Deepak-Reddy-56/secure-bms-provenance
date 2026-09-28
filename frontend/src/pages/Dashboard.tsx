@@ -183,7 +183,6 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                   {activeTab === 'certify' && permissions.canCertify && (
                     <CertifyForm
                       componentID={activeComponentID}
-                      identityId={identity.id}
                       state={lifecycleAct.state}
                       result={lifecycleAct.result}
                       errorMessage={lifecycleAct.errorMessage}
@@ -199,7 +198,6 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                   {activeTab === 'ship' && permissions.canShip && (
                     <ShipForm
                       componentID={activeComponentID}
-                      identityId={identity.id}
                       state={lifecycleAct.state}
                       result={lifecycleAct.result}
                       errorMessage={lifecycleAct.errorMessage}
@@ -215,7 +213,6 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                   {activeTab === 'receive' && permissions.canReceive && (
                     <ReceiveForm
                       componentID={activeComponentID}
-                      identityId={identity.id}
                       state={lifecycleAct.state}
                       result={lifecycleAct.result}
                       errorMessage={lifecycleAct.errorMessage}
@@ -231,7 +228,6 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                   {activeTab === 'transfer' && permissions.canTransfer && (
                     <TransferForm
                       componentID={activeComponentID}
-                      identityId={identity.id}
                       state={lifecycleAct.state}
                       result={lifecycleAct.result}
                       errorMessage={lifecycleAct.errorMessage}
@@ -247,7 +243,6 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                   {activeTab === 'assemble' && permissions.canAssemble && (
                     <AssembleForm
                       componentID={activeComponentID}
-                      identityId={identity.id}
                       state={lifecycleAct.state}
                       result={lifecycleAct.result}
                       errorMessage={lifecycleAct.errorMessage}
