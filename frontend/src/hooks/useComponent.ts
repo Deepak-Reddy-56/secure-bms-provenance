@@ -1,4 +1,3 @@
-import { useIdentity } from '../context/IdentityContext';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   registerComponent,
@@ -71,7 +70,7 @@ interface UseComponentSearchReturn {
   state: SearchState;
   component: Component | null;
   errorMessage: string | null;
-  search: (componentID: string, identityId?: string) => Promise<void>;
+  search: (componentID: string) => Promise<void>;
   clear: () => void;
 }
 
@@ -81,7 +80,7 @@ export function useComponentSearch(): UseComponentSearchReturn {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const search = useCallback(async (componentID: string, identityId?: string) => {
+  const search = useCallback(async (componentID: string) => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -90,7 +89,7 @@ export function useComponentSearch(): UseComponentSearchReturn {
     setComponent(null);
 
     try {
-      const found = await getComponent(componentID, abortRef.current.signal, identityId);
+      const found = await getComponent(componentID, abortRef.current.signal);
       setComponent(found);
       setState('found');
     } catch (err) {
@@ -158,22 +157,17 @@ interface UseSystemOverviewReturn {
 }
 
 export function useSystemOverview(): UseSystemOverviewReturn {
-  const { identity } = useIdentity();
-
   const [registeredCount, setRegisteredCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
 
-    const overview = await getSystemOverview(
-      undefined,
-      identity.id
-    );
+    const overview = await getSystemOverview();
 
     setRegisteredCount(overview?.registeredCount ?? null);
     setLoading(false);
-  }, [identity.id]);
+  }, []);
 
   return { registeredCount, loading, refresh };
 }
