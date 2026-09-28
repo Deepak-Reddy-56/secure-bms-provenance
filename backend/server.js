@@ -5,6 +5,7 @@ const {
 const {
   createSession,
   getSession,
+  updateSession,
   deleteSession,
 } = require('./sessionStore');
 
@@ -98,6 +99,54 @@ function parseCookies(req) {
       return [key, value];
     })
   );
+}
+
+function getAuthenticatedSession(req) {
+  const token = parseCookies(req).session_token;
+  const session = getSession(token);
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.isAdmin === true) {
+    return { token, session };
+  }
+
+  if (!session.userId) {
+    deleteSession(token);
+    return null;
+  }
+
+  const user = findUserById(session.userId);
+
+  if (!user || !user.active) {
+    deleteSession(token);
+    return null;
+  }
+
+  const refreshed = updateSession(token, {
+    ...user,
+    sub: session.sub,
+    picture: session.picture,
+    isAdmin: false,
+  });
+
+  return refreshed
+    ? { token, session: refreshed }
+    : null;
+}
+
+function hasOperationalAccess(session) {
+  return (
+    session.isAdmin !== true &&
+    OPERATIONAL_ROLES.has(session.role) &&
+    Boolean(session.fabricIdentity)
+  );
+}
+
+function hasRole(session, role) {
+  return hasOperationalAccess(session) && session.role === role;
 }
 
 function cleanFabricError(err) {
@@ -271,8 +320,8 @@ const server = http.createServer(async (req, res) => {
       req.method === 'GET' &&
       pathname === '/api/auth/me'
     ) {
-      const cookies = parseCookies(req);
-      const session = getSession(cookies.session_token);
+      const authenticated = getAuthenticatedSession(req);
+      const session = authenticated?.session;
 
       if (!session) {
         res.writeHead(401, {
@@ -303,8 +352,8 @@ const server = http.createServer(async (req, res) => {
     
 
     // ── Protected API authentication ───────────────────────────────────
-    const cookies = parseCookies(req);
-    const session = getSession(cookies.session_token);
+    const authenticated = getAuthenticatedSession(req);
+    const session = authenticated?.session;
 
     if (!session) {
       res.writeHead(401, {
@@ -336,14 +385,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── Admin user and role management ─────────────────────────────────
     if (pathname.startsWith('/api/admin/users')) {
-      if (!ADMIN_EMAIL) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({
-          error: 'Admin account is not configured.',
-        }));
-      }
-
-      if (session.email?.trim().toLowerCase() !== ADMIN_EMAIL) {
+      if (session.isAdmin !== true) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Administrator access required.',
@@ -445,6 +487,12 @@ const server = http.createServer(async (req, res) => {
 
     // ── 3. GET /api/overview ───────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/api/overview') {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
       try {
         const health = await checkFabricConnection();
 
@@ -479,6 +527,12 @@ const server = http.createServer(async (req, res) => {
 
     // ── 4. POST /api/components - Register Component ───────────────────
     if (req.method === 'POST' && pathname === '/api/components') {
+      if (!hasRole(session, 'MANUFACTURER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Manufacturer role required.',
+        }));
+      }
       const body = await parseJsonBody(req);
       const { componentID, componentType, manufacturer, manufactureDate, location } = body;
 
@@ -505,6 +559,12 @@ const server = http.createServer(async (req, res) => {
 
     // ── 5. GET /api/components/:id - Get Component ─────────────────────
     if (req.method === 'GET' && pathname.startsWith('/api/components/')) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
       const parts = pathname.split('/');
       if (parts.length === 4 && parts[3] !== 'overview') {
         const id = decodeURIComponent(parts[3]);
@@ -523,6 +583,12 @@ const server = http.createServer(async (req, res) => {
 
     // ── 6. Day 2 Lifecycle Endpoints ─────────────────────────────────────
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/certify$/)) {
+      if (!hasRole(session, 'CERTIFIER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Certifier role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
 
@@ -582,6 +648,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/ship$/)) {
+      if (!hasRole(session, 'TRANSPORTER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Transporter role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
 
@@ -642,6 +714,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/receive$/)) {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
 
@@ -699,6 +777,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/transfer$/)) {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
 
@@ -757,6 +841,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/assemble$/)) {
+      if (!hasRole(session, 'ASSEMBLER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Assembler role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
       const body = await parseJsonBody(req);
 
@@ -814,6 +904,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && pathname.match(/\/api\/components\/[^\/]+\/history$/)) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
       const id = decodeURIComponent(pathname.split('/')[3]);
 
       try {
