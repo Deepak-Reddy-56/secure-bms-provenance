@@ -1,22 +1,14 @@
 import { useEffect } from 'react';
-import type { NetworkStatus } from '../types/component';
 import type { Page } from '../components/AppShell/AppShell';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_LABELS, ROLE_PERMISSIONS } from '../types/identity';
 import { useSystemOverview } from '../hooks/useComponent';
 
 interface OverviewPageProps {
-  networkStatus: NetworkStatus;
   onNavigate: (page: Page) => void;
 }
 
-const NETWORK_LABELS: Record<NetworkStatus, string> = {
-  connected:    'Connected',
-  connecting:   'Connecting',
-  disconnected: 'Offline',
-};
-
-export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
+export function OverviewPage({ onNavigate }: OverviewPageProps) {
   const { role, fabricIdentity } = useAuth();
 
   if (!role || !fabricIdentity) {
@@ -36,6 +28,7 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
     if (permissions.canCertify)   return { label: 'Certify Component',  page: 'components' as Page };
     if (permissions.canShip)      return { label: 'Ship Component',      page: 'components' as Page };
     if (permissions.canReceive)   return { label: 'Receive Component',  page: 'components' as Page };
+    if (permissions.canTransfer)  return { label: 'Transfer Custody', page: 'components' as Page };
     if (permissions.canAssemble)  return { label: 'Assemble Component', page: 'components' as Page };
     return { label: 'Verify Component', page: 'components' as Page };
   };
@@ -44,9 +37,8 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
 
   const kpis = [
     { label: 'Registered Components', value: overview.loading ? null : overview.registeredCount, sub: 'on the Fabric ledger' },
-    { label: 'Fabric Network', value: NETWORK_LABELS[networkStatus], sub: 'Channel: mychannel', isStatus: true },
-    { label: 'Chaincode', value: 'bmsprovenance', sub: 'Active deployment', isMono: true },
-    { label: 'Current Identity', value: fabricIdentity, sub: roleLabel, isMono: true },
+    { label: 'Assigned Role', value: roleLabel, sub: 'Authorized workflow' },
+    { label: 'Fabric Identity', value: fabricIdentity, sub: 'Authenticated ledger identity', isMono: true },
   ];
 
   return (
@@ -62,14 +54,7 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
         {kpis.map((kpi, idx) => (
           <div key={idx} className="kpi-card">
             <span className="kpi-label">{kpi.label}</span>
-            {kpi.isStatus ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <span className={`network-dot ${networkStatus}`} style={{ width: 8, height: 8 }} aria-hidden="true" />
-                <span style={{ fontSize: 'var(--text-xl)', fontWeight: 300, color: 'var(--text-primary)' }}>
-                  {kpi.value}
-                </span>
-              </div>
-            ) : kpi.value === null ? (
+            {kpi.value === null ? (
               <span className="kpi-value muted">—</span>
             ) : (
               <span className={`kpi-value${kpi.isMono ? ' mono' : ''}`}
@@ -84,35 +69,28 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
 
       {/* Role context + primary action */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: 'var(--border-subtle)', marginBottom: 'var(--space-8)' }}>
-        {/* Role panel */}
         <div className="panel" style={{ border: 'none' }}>
           <div className="panel-header">
-            <span className="panel-title">Current Role — {roleLabel}</span>
+            <span className="panel-title">Assigned Workflow</span>
           </div>
           <div className="panel-body">
-            <div className="permission-list" aria-label="Role permissions">
-              {[
-                { label: 'Register Component',  allowed: permissions.canRegister  },
-                { label: 'Certify Component',   allowed: permissions.canCertify   },
-                { label: 'Ship Component',       allowed: permissions.canShip      },
-                { label: 'Receive Component',   allowed: permissions.canReceive   },
-                { label: 'Transfer Custody',    allowed: permissions.canTransfer  },
-                { label: 'Assemble Component',  allowed: permissions.canAssemble  },
-                { label: 'Verify Component',    allowed: true },
-                { label: 'View Provenance',     allowed: true },
-              ].map(p => (
-                <div key={p.label} className="permission-item">
-                  <span className={p.allowed ? 'permission-check' : 'permission-cross'} aria-hidden="true">
-                    {p.allowed ? '✓' : '×'}
-                  </span>
-                  <span className={`permission-label${p.allowed ? '' : ' denied'}`}>{p.label}</span>
-                </div>
-              ))}
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)' }}>
+              You are signed in as <strong style={{ color: 'var(--text-primary)' }}>{roleLabel}</strong>.
+            </p>
+            <div style={{
+              borderLeft: '3px solid var(--interactive)',
+              paddingLeft: 'var(--space-4)',
+            }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-placeholder)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                Authorized operation
+              </div>
+              <div style={{ fontSize: 'var(--text-lg)', color: 'var(--text-primary)', marginTop: 'var(--space-1)', fontWeight: 500 }}>
+                {action.label}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Primary action panel */}
         <div className="panel" style={{ border: 'none' }}>
           <div className="panel-header">
             <span className="panel-title">Primary Action</span>
