@@ -216,16 +216,6 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
               )}
             </div>
           )}
-          <button
-            type="button"
-            className="sidebar-logout"
-            onClick={() => void logout()}
-            title="Sign out"
-            aria-label="Sign out"
-          >
-            <span aria-hidden="true">↪</span>
-            {!collapsed && <span>Sign out</span>}
-          </button>
         </div>
       </nav>
 
