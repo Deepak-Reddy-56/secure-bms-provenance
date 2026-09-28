@@ -123,11 +123,12 @@ export async function assembleComponent(
  */
 export async function getComponentHistory(
   componentID: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  routeBase = '/api/components'
 ): Promise<ProvenanceEvent[]> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.get<ProvenanceEvent[]>(
-    `/api/components/${encoded}/history`,
+    `${routeBase}/${encoded}/history`,
     signal
   );
 }
