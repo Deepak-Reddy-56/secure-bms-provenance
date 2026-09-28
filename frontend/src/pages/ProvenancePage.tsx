@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useIdentity } from '../context/IdentityContext';
 import { useProvenanceHistory } from '../hooks/useLifecycleAction';
 import type { ProvenanceEvent } from '../types/provenance';
 
