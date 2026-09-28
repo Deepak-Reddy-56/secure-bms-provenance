@@ -15,13 +15,13 @@ import type { ProvenanceEvent } from '../types/provenance';
 
 /**
  * Register a new component on the Hyperledger Fabric ledger.
- * Calls POST /api/components
+ * Calls POST /api/manufacturer/components
  */
 export async function registerComponent(
   payload: RegisterComponentPayload,
   signal?: AbortSignal
 ): Promise<Component> {
-  return api.post<Component>('/api/components', payload, signal);
+  return api.post<Component>('/api/manufacturer/components', payload, signal);
 }
 
 /**
@@ -39,7 +39,7 @@ export async function getComponent(
 // ── Day 2 lifecycle operations ────────────────────────────────
 
 /**
- * Certify a component. Calls POST /api/components/:id/certify
+ * Certify a component. Calls POST /api/certifier/components/:id/certify
  */
 export async function certifyComponent(
   componentID: string,
@@ -48,14 +48,14 @@ export async function certifyComponent(
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.post<LifecycleActionResult>(
-    `/api/components/${encoded}/certify`,
+    `/api/certifier/components/${encoded}/certify`,
     payload,
     signal
   );
 }
 
 /**
- * Ship a component. Calls POST /api/components/:id/ship
+ * Ship a component. Calls POST /api/transporter/components/:id/ship
  */
 export async function shipComponent(
   componentID: string,
@@ -64,14 +64,14 @@ export async function shipComponent(
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.post<LifecycleActionResult>(
-    `/api/components/${encoded}/ship`,
+    `/api/transporter/components/${encoded}/ship`,
     payload,
     signal
   );
 }
 
 /**
- * Receive a component. Calls POST /api/components/:id/receive
+ * Receive a component. Calls POST /api/warehouse/components/:id/receive
  */
 export async function receiveComponent(
   componentID: string,
@@ -80,14 +80,14 @@ export async function receiveComponent(
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.post<LifecycleActionResult>(
-    `/api/components/${encoded}/receive`,
+    `/api/warehouse/components/${encoded}/receive`,
     payload,
     signal
   );
 }
 
 /**
- * Transfer custody. Calls POST /api/components/:id/transfer
+ * Transfer custody. Calls POST /api/warehouse/components/:id/transfer
  */
 export async function transferCustody(
   componentID: string,
@@ -96,14 +96,14 @@ export async function transferCustody(
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.post<LifecycleActionResult>(
-    `/api/components/${encoded}/transfer`,
+    `/api/warehouse/components/${encoded}/transfer`,
     payload,
     signal
   );
 }
 
 /**
- * Assemble a component. Calls POST /api/components/:id/assemble
+ * Assemble a component. Calls POST /api/assembler/components/:id/assemble
  */
 export async function assembleComponent(
   componentID: string,
@@ -112,7 +112,7 @@ export async function assembleComponent(
 ): Promise<LifecycleActionResult> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.post<LifecycleActionResult>(
-    `/api/components/${encoded}/assemble`,
+    `/api/assembler/components/${encoded}/assemble`,
     payload,
     signal
   );
