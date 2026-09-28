@@ -31,7 +31,7 @@ import './ActionForms.css';
 // ── Shared sub-components ────────────────────────────────────
 
 function FormField({
-  id, label, type = 'text', value, onChange, placeholder, disabled, required = true,
+  id, label, type = 'text', value, onChange, placeholder, disabled, readOnly = false, required = true,
 }: {
   id: string; label: string; type?: string; value: string;
   onChange: (v: string) => void; placeholder?: string;
