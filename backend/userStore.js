@@ -76,6 +76,16 @@ function validateRole(role) {
   }
 }
 
+function ensureRoleAvailable(store, role, ignoredUserId = null) {
+  const assignedUser = store.users.find(
+    user => user.role === role && user.id !== ignoredUserId
+  );
+
+  if (assignedUser) {
+    throw new Error('Role is already assigned to another user.');
+  }
+}
+
 function addUser({ email, name = '', role }) {
   const normalizedEmail = normalizeEmail(email);
 
@@ -86,6 +96,8 @@ function addUser({ email, name = '', role }) {
   validateRole(role);
 
   const store = readStore();
+
+  ensureRoleAvailable(store, role);
 
   const existing = store.users.find(
     user => user.email === normalizedEmail
@@ -147,6 +159,8 @@ function updateUserRole(id, role) {
   if (!user) {
     throw new Error('User not found.');
   }
+
+  ensureRoleAvailable(store, role, id);
 
   user.role = role;
   user.fabricIdentity = ROLE_TO_FABRIC_IDENTITY[role];
