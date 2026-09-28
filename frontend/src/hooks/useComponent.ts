@@ -128,21 +128,31 @@ interface UseNetworkStatusReturn {
   refresh: () => Promise<void>;
 }
 
-export function useNetworkStatus(): UseNetworkStatusReturn {
+export function useNetworkStatus(enabled = true): UseNetworkStatusReturn {
   const [status, setStatus] = useState<NetworkStatus>('connecting');
   const [health, setHealth] = useState<FabricHealthResult | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      return;
+    }
+
     const res = await checkFabricHealth();
     setHealth(res);
     setStatus(res.connected ? 'connected' : 'disconnected');
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 10000);
+    if (!enabled) {
+      setHealth(null);
+      setStatus('connecting');
+      return;
+    }
+
+    void refresh();
+    const interval = setInterval(() => void refresh(), 10000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   return { status, health, refresh };
 }
