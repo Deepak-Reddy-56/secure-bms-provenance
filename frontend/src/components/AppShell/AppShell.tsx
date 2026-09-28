@@ -116,17 +116,20 @@ const icons: Record<string, ReactNode> = {
   ),
 };
 
-const NAV_ITEMS: { id: Page; label: string }[] = [
+const OPERATIONAL_NAV: { id: Page; label: string }[] = [
   { id: 'overview',   label: 'Overview'   },
   { id: 'components', label: 'Components' },
   { id: 'lifecycle',  label: 'Lifecycle'  },
   { id: 'provenance', label: 'Provenance' },
-  { id: 'audit',      label: 'Audit Log'  },
-  { id: 'network',    label: 'Network'    },
+];
+
+const AUDITOR_NAV: { id: Page; label: string }[] = [
+  ...OPERATIONAL_NAV,
+  { id: 'audit', label: 'Audit Log' },
 ];
 
 export function AppShell({ children, currentPage, onNavigate, networkStatus, pageTitle }: AppShellProps) {
-  const { role, fabricIdentity, user, isAdmin } = useAuth();
+  const { role, fabricIdentity, user, isAdmin, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   const roleLabel = isAdmin
@@ -140,8 +143,13 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
     : fabricIdentity || 'Unassigned';
 
   const navItems = isAdmin
-    ? [{ id: 'settings' as Page, label: PAGE_LABELS.settings }]
-    : NAV_ITEMS;
+    ? [
+        { id: 'settings' as Page, label: PAGE_LABELS.settings },
+        { id: 'network' as Page, label: PAGE_LABELS.network },
+      ]
+    : role === 'AUDITOR'
+      ? AUDITOR_NAV
+      : OPERATIONAL_NAV;
 
   return (
     <div className="app-shell">
@@ -198,14 +206,26 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
               <span className="sidebar-identity-role">{roleLabel}</span>
             </div>
           )}
-          <div className="sidebar-network">
-            <div className={`sidebar-network-dot ${networkStatus}`} aria-hidden="true" />
-            {!collapsed && (
-              <span className="sidebar-network-text">
-                Fabric · {NETWORK_LABELS[networkStatus]}
-              </span>
-            )}
-          </div>
+          {isAdmin && (
+            <div className="sidebar-network">
+              <div className={`sidebar-network-dot ${networkStatus}`} aria-hidden="true" />
+              {!collapsed && (
+                <span className="sidebar-network-text">
+                  Fabric · {NETWORK_LABELS[networkStatus]}
+                </span>
+              )}
+            </div>
+          )}
+          <button
+            type="button"
+            className="sidebar-logout"
+            onClick={() => void logout()}
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <span aria-hidden="true">↪</span>
+            {!collapsed && <span>Sign out</span>}
+          </button>
         </div>
       </nav>
 
@@ -228,18 +248,27 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
               </span>
             </div>
 
-            {/* Network status */}
-            <div
-              className="header-network"
-              aria-label={`Fabric network: ${NETWORK_LABELS[networkStatus]}`}
-              tabIndex={0}
-              role="status"
+            {isAdmin && (
+              <div
+                className="header-network"
+                aria-label={`Fabric network: ${NETWORK_LABELS[networkStatus]}`}
+                tabIndex={0}
+                role="status"
+              >
+                <span className={`network-dot ${networkStatus}`} aria-hidden="true" />
+                <span className={`header-network-text ${networkStatus}`}>
+                  {NETWORK_LABELS[networkStatus]}
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="header-logout"
+              onClick={() => void logout()}
             >
-              <span className={`network-dot ${networkStatus}`} aria-hidden="true" />
-              <span className={`header-network-text ${networkStatus}`}>
-                {NETWORK_LABELS[networkStatus]}
-              </span>
-            </div>
+              Sign out
+            </button>
           </div>
         </header>
 
