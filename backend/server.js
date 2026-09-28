@@ -20,9 +20,19 @@ const {
   queryChaincode
 } = require('./fabricGateway');
 
+const {
+  getUsers,
+  createUser,
+  getUser,
+  changeUserRole,
+  changeUserStatus,
+  deleteUser,
+} = require('./userAdminService');
+
 
 
 const PORT = process.env.PORT || 3000;
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
 function setCorsHeaders(req, res) {
   const allowedOrigins = [
@@ -310,6 +320,116 @@ const server = http.createServer(async (req, res) => {
       `[${new Date().toISOString()}] ${req.method} ${pathname} ` +
       `(Fabric Identity: ${identity})`
     );
+
+
+    // ── Admin user and role management ─────────────────────────────────
+    if (pathname.startsWith('/api/admin/users')) {
+      if (!ADMIN_EMAIL) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Admin account is not configured.',
+        }));
+      }
+
+      if (session.email?.trim().toLowerCase() !== ADMIN_EMAIL) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        if (req.method === 'GET' && pathname === '/api/admin/users') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ users: getUsers() }));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/admin/users') {
+          const body = await parseJsonBody(req);
+
+          const user = createUser({
+            email: body.email,
+            name: body.name,
+            role: body.role,
+          });
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        const match = pathname.match(
+          /^\/api\/admin\/users\/([^/]+)(?:\/(role|status))?$/
+        );
+
+        if (!match) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Endpoint not found' }));
+        }
+
+        const userId = decodeURIComponent(match[1]);
+        const action = match[2];
+
+        if (req.method === 'GET' && !action) {
+          const user = getUser(userId);
+
+          if (!user) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'User not found.' }));
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'PUT' && action === 'role') {
+          const body = await parseJsonBody(req);
+          const user = changeUserRole(userId, body.role);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'PUT' && action === 'status') {
+          const body = await parseJsonBody(req);
+          const user = changeUserStatus(userId, body.active);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'DELETE' && !action) {
+          const user = deleteUser(userId);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+      } catch (err) {
+        console.error(
+          'Admin user-management request failed:',
+          err.message
+        );
+
+        const msg = err.message || 'Admin user-management operation failed.';
+        let code = 500;
+
+        if (msg.includes('already exists') || msg.includes('Invalid role')) {
+          code = 409;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('Email is required') ||
+          msg.includes('Active status must be boolean')
+        ) {
+          code = 400;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
 
     // ── 3. GET /api/overview ───────────────────────────────────────────
     if (req.method === 'GET' && pathname === '/api/overview') {
