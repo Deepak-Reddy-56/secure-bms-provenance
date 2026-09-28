@@ -72,6 +72,19 @@ function getFabricIdentityFromGoogleSub(sub) {
 
 async function authenticateGoogleToken(idToken) {
   const payload = await verifyGoogleIdToken(idToken);
+  const email = (payload.email || '').trim().toLowerCase();
+  const adminEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+
+  if (adminEmail && email === adminEmail) {
+    return {
+      sub: payload.sub,
+      email: payload.email || null,
+      name: payload.name || null,
+      picture: payload.picture || null,
+      fabricIdentity: null,
+      isAdmin: true,
+    };
+  }
 
   const fabricIdentity =
     getFabricIdentityFromGoogleSub(payload.sub);
@@ -95,6 +108,7 @@ async function authenticateGoogleToken(idToken) {
     name: payload.name || null,
     picture: payload.picture || null,
     fabricIdentity,
+    isAdmin: false,
   };
 }
 
