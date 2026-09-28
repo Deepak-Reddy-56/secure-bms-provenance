@@ -88,7 +88,6 @@ function EventCard({ event }: { event: ProvenanceEvent }) {
 }
 
 export function ProvenancePage() {
-  const { identity } = useIdentity();
   const [searchInput, setSearchInput] = useState('');
   const [loadedID,    setLoadedID]    = useState('');
   const history = useProvenanceHistory();
