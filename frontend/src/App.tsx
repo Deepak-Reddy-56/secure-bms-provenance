@@ -10,6 +10,7 @@ import { LifecyclePage } from './pages/LifecyclePage';
 import { ProvenancePage } from './pages/ProvenancePage';
 import { AuditPage } from './pages/AuditPage';
 import { NetworkPage } from './pages/NetworkPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
 
 const PAGE_TITLES: Record<Page, string> = {
@@ -19,7 +20,7 @@ const PAGE_TITLES: Record<Page, string> = {
   provenance: 'Provenance History',
   audit: 'Audit Log',
   network: 'Network Status',
-  settings: 'Settings',
+  settings: 'Administration',
 };
 
 function AppInner() {
@@ -65,18 +66,7 @@ function AppInner() {
         );
 
       case 'settings':
-        return (
-          <div className="empty-state">
-            <p className="empty-state-title">
-              {isAdmin ? 'Administrator' : 'Settings'}
-            </p>
-            <p className="empty-state-desc">
-              {isAdmin
-                ? 'User and role management will be available here.'
-                : 'Configuration options for the provenance platform.'}
-            </p>
-          </div>
-        );
+        return <SettingsPage />;
 
       default:
         return null;
