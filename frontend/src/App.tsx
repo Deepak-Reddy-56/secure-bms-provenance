@@ -99,7 +99,6 @@ function AuthGate() {
   const {
     authenticated,
     loading,
-    isAdmin,
   } = useAuth();
 
   if (loading) {
