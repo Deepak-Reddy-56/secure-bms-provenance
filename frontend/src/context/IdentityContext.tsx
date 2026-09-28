@@ -1,11 +1,16 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import type { UserIdentity, UserRole, RolePermissions } from '../types/identity';
-import { ALL_IDENTITIES, ROLE_PERMISSIONS, ROLE_LABELS } from '../types/identity';
+
+import { useAuth } from './AuthContext';
+import type {
+  RolePermissions,
+  UserIdentity,
+  UserRole,
+} from '../types/identity';
+import { ROLE_LABELS, ROLE_PERMISSIONS } from '../types/identity';
 
 interface IdentityContextValue {
   identity: UserIdentity;
-  setIdentityById: (id: string) => void;
   permissions: RolePermissions;
   roleLabel: string;
 }
@@ -13,29 +18,35 @@ interface IdentityContextValue {
 const IdentityContext = createContext<IdentityContextValue | null>(null);
 
 export function IdentityProvider({ children }: { children: ReactNode }) {
-  const [identity, setIdentity] = useState<UserIdentity>(ALL_IDENTITIES[0]);
+  const { role, fabricIdentity } = useAuth();
 
-  const setIdentityById = useCallback((id: string) => {
-    const found = ALL_IDENTITIES.find(i => i.id === id);
-    if (found) setIdentity(found);
-  }, []);
+  if (!role || !fabricIdentity) {
+    throw new Error('IdentityProvider requires an operational user.');
+  }
+
+  const identity: UserIdentity = {
+    id: fabricIdentity,
+    role: role as UserRole,
+  };
 
   const permissions = ROLE_PERMISSIONS[identity.role];
-  const roleLabel   = ROLE_LABELS[identity.role];
+  const roleLabel = ROLE_LABELS[identity.role];
 
   return (
-    <IdentityContext.Provider value={{ identity, setIdentityById, permissions, roleLabel }}>
+    <IdentityContext.Provider
+      value={{ identity, permissions, roleLabel }}
+    >
       {children}
     </IdentityContext.Provider>
   );
 }
 
 export function useIdentity(): IdentityContextValue {
-  const ctx = useContext(IdentityContext);
-  if (!ctx) throw new Error('useIdentity must be used inside <IdentityProvider>');
-  return ctx;
-}
+  const context = useContext(IdentityContext);
 
-// Convenience re-exports
-export { ALL_IDENTITIES };
-export type { UserIdentity, UserRole };
+  if (!context) {
+    throw new Error('useIdentity must be used inside <IdentityProvider>');
+  }
+
+  return context;
+}
