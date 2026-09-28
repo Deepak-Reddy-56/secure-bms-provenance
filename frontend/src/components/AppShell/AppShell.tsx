@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { useIdentity, ALL_IDENTITIES } from '../../context/IdentityContext';
+import { useAuth } from '../../context/AuthContext';
+import { ROLE_LABELS } from '../../types/identity';
 import type { NetworkStatus } from '../../types/component';
 import './AppShell.css';
 
@@ -125,8 +126,22 @@ const NAV_ITEMS: { id: Page; label: string }[] = [
 ];
 
 export function AppShell({ children, currentPage, onNavigate, networkStatus, pageTitle }: AppShellProps) {
-  const { identity, setIdentityById, roleLabel } = useIdentity();
+  const { role, fabricIdentity, user, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  const roleLabel = isAdmin
+    ? 'Administrator'
+    : role
+      ? ROLE_LABELS[role]
+      : 'Unknown';
+
+  const identityLabel = isAdmin
+    ? 'Application Admin'
+    : fabricIdentity || 'Unassigned';
+
+  const navItems = isAdmin
+    ? [{ id: 'settings' as Page, label: PAGE_LABELS.settings }]
+    : NAV_ITEMS;
 
   return (
     <div className="app-shell">
@@ -155,7 +170,7 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
 
         {/* Navigation */}
         <div className="sidebar-nav" role="list">
-          {NAV_ITEMS.map(item => (
+          {navItems.map(item => (
             <button
               key={item.id}
               role="listitem"
@@ -174,8 +189,12 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
         <div className="sidebar-footer">
           {!collapsed && (
             <div className="sidebar-identity">
-              <span className="sidebar-identity-label">Current Identity</span>
-              <span className="sidebar-identity-id">{identity.id}</span>
+              <span className="sidebar-identity-label">
+                {isAdmin ? 'Account' : 'Current Identity'}
+              </span>
+              <span className="sidebar-identity-id">
+                {identityLabel}
+              </span>
               <span className="sidebar-identity-role">{roleLabel}</span>
             </div>
           )}
@@ -197,22 +216,12 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
           <h1 className="top-header-title">{pageTitle}</h1>
 
           <div className="top-header-right">
-            {/* Development identity selector */}
-            <div className="header-identity" aria-label="Development identity selector">
-              <span className="header-identity-label">Identity</span>
-              <select
-                id="header-identity-select"
-                className="header-identity-select"
-                value={identity.id}
-                onChange={e => setIdentityById(e.target.value)}
-                aria-label="Select development identity"
-              >
-                {ALL_IDENTITIES.map(i => (
-                  <option key={i.id} value={i.id}>{i.id}</option>
-                ))}
-              </select>
+            <div className="header-identity" aria-label="Authenticated account">
+              <span className="header-identity-label">
+                {user?.email || 'Authenticated account'}
+              </span>
               <span
-                className={`header-role-badge ${identity.role}`}
+                className={`header-role-badge ${role || 'ADMIN'}`}
                 aria-label={`Role: ${roleLabel}`}
               >
                 {roleLabel}
