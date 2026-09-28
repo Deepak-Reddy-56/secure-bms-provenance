@@ -23,7 +23,6 @@ function eventActor(event: ProvenanceEvent): string {
 }
 
 export function AuditPage() {
-  const { identity } = useIdentity();
   const history = useProvenanceHistory();
 
   const [searchInput,    setSearchInput]    = useState('');
