@@ -137,7 +137,7 @@ export function NetworkPage({ networkStatus, health }: NetworkPageProps) {
               {[
                 { key: 'Gateway Status', value: NETWORK_LABELS[networkStatus] },
                 { key: 'Backend API',    value: 'http://localhost:3000' },
-                { key: 'Auth Model',     value: 'X-Identity (Development)' },
+                { key: 'Auth Model',     value: 'Google OAuth + HttpOnly session' },
                 { key: 'Endorsement',    value: 'Fabric Chaincode' },
                 { key: 'Ledger',         value: 'Permissioned Blockchain' },
               ].map(row => (
