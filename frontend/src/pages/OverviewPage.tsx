@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import type { NetworkStatus } from '../types/component';
 import type { Page } from '../components/AppShell/AppShell';
-import { useIdentity } from '../context/IdentityContext';
+import { useAuth } from '../context/AuthContext';
+import { ROLE_LABELS, ROLE_PERMISSIONS } from '../types/identity';
 import { useSystemOverview } from '../hooks/useComponent';
 
 interface OverviewPageProps {
@@ -16,8 +17,14 @@ const NETWORK_LABELS: Record<NetworkStatus, string> = {
 };
 
 export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
-  const { identity, permissions, roleLabel } = useIdentity();
-  const overview = useSystemOverview();
+  const { role, fabricIdentity } = useAuth();
+
+  if (!role || !fabricIdentity) {
+    throw new Error('OverviewPage requires an operational user.');
+  }
+
+  const permissions = ROLE_PERMISSIONS[role];
+  const roleLabel = ROLE_LABELS[role];  const overview = useSystemOverview();
 
   useEffect(() => {
     overview.refresh();
@@ -39,7 +46,7 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
     { label: 'Registered Components', value: overview.loading ? null : overview.registeredCount, sub: 'on the Fabric ledger' },
     { label: 'Fabric Network', value: NETWORK_LABELS[networkStatus], sub: 'Channel: mychannel', isStatus: true },
     { label: 'Chaincode', value: 'bmsprovenance', sub: 'Active deployment', isMono: true },
-    { label: 'Current Identity', value: identity.id, sub: roleLabel, isMono: true },
+    { label: 'Current Identity', value: fabricIdentity, sub: roleLabel, isMono: true },
   ];
 
   return (
@@ -112,7 +119,7 @@ export function OverviewPage({ networkStatus, onNavigate }: OverviewPageProps) {
           </div>
           <div className="panel-body">
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-6)' }}>
-              As <strong style={{ color: 'var(--text-primary)' }}>{identity.id}</strong>, your primary workflow is component {action.label.toLowerCase()}.
+              As <strong style={{ color: 'var(--text-primary)' }}>{fabricIdentity}</strong>, your primary workflow is component {action.label.toLowerCase()}.
             </p>
             <button
               className="btn btn-primary btn-lg"

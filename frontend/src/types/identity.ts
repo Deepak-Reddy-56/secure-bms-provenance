@@ -10,21 +10,6 @@ export type UserRole =
   | 'ASSEMBLER'
   | 'AUDITOR';
 
-export interface UserIdentity {
-  id: string;      // e.g. "manufacturer1"
-  role: UserRole;
-}
-
-// All available identities for the Day 2 dev selector
-export const ALL_IDENTITIES: UserIdentity[] = [
-  { id: 'manufacturer1', role: 'MANUFACTURER' },
-  { id: 'certifier1',    role: 'CERTIFIER'    },
-  { id: 'transporter1',  role: 'TRANSPORTER'  },
-  { id: 'warehouse1',    role: 'WAREHOUSE'    },
-  { id: 'assembler1',    role: 'ASSEMBLER'    },
-  { id: 'auditor1',      role: 'AUDITOR'      },
-];
-
 // ── Permission helpers ────────────────────────────────────────
 
 export interface RolePermissions {

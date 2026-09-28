@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { IdentityProvider } from './context/IdentityContext';
 import { useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AppShell } from './components/AppShell/AppShell';
@@ -121,15 +120,7 @@ function AuthGate() {
     return <LoginPage />;
   }
 
-  if (isAdmin) {
-    return <AppInner />;
-  }
-
-  return (
-    <IdentityProvider>
-      <AppInner />
-    </IdentityProvider>
-  );
+  return <AppInner />;
 }
 
 export default function App() {

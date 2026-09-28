@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
-import { useIdentity } from '../context/IdentityContext';
+import { useAuth } from '../context/AuthContext';
+import { ROLE_PERMISSIONS } from '../types/identity';
 import { useToast } from '../context/ToastContext';
 import { useComponentSearch, useRegistration } from '../hooks/useComponent';
 import { useLifecycleAction } from '../hooks/useLifecycleAction';
@@ -114,8 +115,13 @@ function Field({ id, label, type = 'text', value, onChange, placeholder, disable
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
 export function ComponentsPage() {
-  const { identity, permissions } = useIdentity();
-  const { addToast } = useToast();
+  const { role, fabricIdentity } = useAuth();
+
+  if (!role || !fabricIdentity) {
+    throw new Error('ComponentsPage requires an operational user.');
+  }
+
+  const permissions = ROLE_PERMISSIONS[role];  const { addToast } = useToast();
   const search = useComponentSearch();
   const registration = useRegistration();
   const action = useLifecycleAction();
@@ -187,7 +193,7 @@ export function ComponentsPage() {
     { id: 'assemble' as ActionTab, label: 'Assemble', allowed: permissions.canAssemble },
   ] as const).filter(t => t.allowed);
 
-  const isAuditor = identity.role === 'AUDITOR';
+  const isAuditor = role === 'AUDITOR';
 
   return (
     <div>
@@ -281,7 +287,7 @@ export function ComponentsPage() {
         <div className="panel-header">
           <span className="panel-title">Role Actions</span>
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {identity.id} · {identity.role}
+            {fabricIdentity} · {role}
           </span>
         </div>
 
@@ -347,7 +353,7 @@ export function ComponentsPage() {
                     </div>
                     <div>
                       <div className="tx-field-label">Actor</div>
-                      <div className="tx-field-value mono">{identity.id}</div>
+                      <div className="tx-field-value mono">{fabricIdentity}</div>
                     </div>
                     {action.result.txId && (
                       <div style={{ gridColumn: '1 / -1' }}>
@@ -380,7 +386,7 @@ export function ComponentsPage() {
                   </p>
                   {action.isUnauthorized && (
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                      Identity: {identity.id} · Role: {identity.role}
+                      Identity: {fabricIdentity} · Role: {role}
                     </div>
                   )}
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-3)' }} onClick={action.reset}>
@@ -478,7 +484,7 @@ if (currentStatus !== 'TRANSFERRED') {
   return;
 }
                       openConfirm({
-                        title: 'Certify Component', componentID: activeID, actor: identity.id,
+                        title: 'Certify Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'MANUFACTURED', toStatus: 'CERTIFIED',
                         fields: [{ label: 'Certificate ID', value: cert.certificateID }, { label: 'Compliance', value: cert.complianceReference }],
                       }, () => action.execute(sig => certifyComponent(activeID, cert, sig))
@@ -523,7 +529,7 @@ if (currentStatus !== 'TRANSFERRED') {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
-                        title: 'Ship Component', componentID: activeID, actor: identity.id,
+                        title: 'Ship Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
                         fields: [{ label: 'From', value: ship.from }, { label: 'To', value: ship.to }, { label: 'Shipment ID', value: ship.shipmentID }],
                       }, () => action.execute(sig => shipComponent(activeID, ship, sig))
@@ -537,7 +543,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="ship-trnsp" label="Transporter" value={identity.id} onChange={() => {}} readOnly />
+                        <Field id="ship-trnsp" label="Transporter" value={fabricIdentity} onChange={() => {}} readOnly />
                         <Field id="ship-from" label="From Location" value={ship.from} onChange={v => setShip(p => ({ ...p, from: v }))} placeholder="Bengaluru" />
                         <Field id="ship-to" label="To Location" value={ship.to} onChange={v => setShip(p => ({ ...p, to: v }))} placeholder="Mysuru" />
                         <Field id="ship-sid" label="Shipment ID" value={ship.shipmentID} onChange={v => setShip(p => ({ ...p, shipmentID: v }))} placeholder="SHIP-001" />
@@ -557,9 +563,9 @@ if (currentStatus !== 'TRANSFERRED') {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
-                        title: 'Receive Component', componentID: activeID, actor: identity.id,
+                        title: 'Receive Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'SHIPPED', toStatus: 'RECEIVED',
-                        fields: [{ label: 'Warehouse', value: identity.id }, { label: 'Location', value: recv.location }],
+                        fields: [{ label: 'Warehouse', value: fabricIdentity }, { label: 'Location', value: recv.location }],
                       }, () => action.execute(sig => receiveComponent(activeID, recv, sig))
                         .then(success => { if(success){handleSuccess(`Component ${activeID} received`);
                       }
@@ -571,7 +577,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="recv-wh" label="Warehouse" value={identity.id} onChange={() => {}} readOnly />
+                        <Field id="recv-wh" label="Warehouse" value={fabricIdentity} onChange={() => {}} readOnly />
                         <Field id="recv-loc" label="Location" value={recv.location} onChange={v => setRecv(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                         <Field id="recv-date" label="Received Date" type="date" value={recv.receivedDate} onChange={v => setRecv(p => ({ ...p, receivedDate: v }))} />
                       </div>
@@ -588,9 +594,9 @@ if (currentStatus !== 'TRANSFERRED') {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
-                        title: 'Transfer Custody', componentID: activeID, actor: identity.id,
+                        title: 'Transfer Custody', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
-                        fields: [{ label: 'From', value: identity.id }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
+                        fields: [{ label: 'From', value: fabricIdentity }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
                       }, () => action.execute(sig => transferCustody(activeID, xfr, sig))
                         .then(success => {if(success){handleSuccess(`Custody transferred for ${activeID}`);
                       }
@@ -601,7 +607,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="xfr-from" label="From" value={identity.id} onChange={() => {}} readOnly />
+                        <Field id="xfr-from" label="From" value={fabricIdentity} onChange={() => {}} readOnly />
                         <Field id="xfr-to" label="To" value={xfr.to} onChange={v => setXfr(p => ({ ...p, to: v }))} placeholder="assembler1" />
                         <Field id="xfr-loc" label="Location" value={xfr.location} onChange={v => setXfr(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                         <Field id="xfr-date" label="Transfer Date" type="date" value={xfr.transferDate} onChange={v => setXfr(p => ({ ...p, transferDate: v }))} />
@@ -618,9 +624,9 @@ if (currentStatus !== 'TRANSFERRED') {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
-                        title: 'Assemble Component', componentID: activeID, actor: identity.id,
+                        title: 'Assemble Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
-                        fields: [{ label: 'Assembler', value: identity.id }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
+                        fields: [{ label: 'Assembler', value: fabricIdentity }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
                       }, () => action.execute(sig => assembleComponent(activeID, assy, sig))
                         .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
                       }
@@ -631,7 +637,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="assy-asmblr" label="Assembler" value={identity.id} onChange={() => {}} readOnly />
+                        <Field id="assy-asmblr" label="Assembler" value={fabricIdentity} onChange={() => {}} readOnly />
                         <Field id="assy-id" label="Assembly ID" value={assy.assemblyID} onChange={v => setAssy(p => ({ ...p, assemblyID: v }))} placeholder="ASSY-001" />
                         <Field id="assy-loc" label="Location" value={assy.location} onChange={v => setAssy(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useIdentity } from '../context/IdentityContext';
+import { useAuth } from '../context/AuthContext';
+import { ROLE_PERMISSIONS } from '../types/identity';
 import { useRegistration, useComponentSearch, useSystemOverview } from '../hooks/useComponent';
 import { useLifecycleAction, useProvenanceHistory } from '../hooks/useLifecycleAction';
 import { Overview } from '../components/Overview/Overview';
@@ -25,8 +26,13 @@ interface DashboardProps {
 type ActiveTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
 export function Dashboard({ networkStatus }: DashboardProps) {
-  const { identity, permissions } = useIdentity();
-  const registration  = useRegistration();
+  const { role, fabricIdentity } = useAuth();
+
+  if (!role || !fabricIdentity) {
+    throw new Error('Dashboard requires an operational user.');
+  }
+
+  const permissions = ROLE_PERMISSIONS[role];  const registration  = useRegistration();
   const search        = useComponentSearch();
   const overview      = useSystemOverview();
   const lifecycleAct  = useLifecycleAction();
@@ -45,12 +51,12 @@ export function Dashboard({ networkStatus }: DashboardProps) {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(defaultTab);
 
-  // When identity changes, reset to the appropriate default tab
+  // Reset the action view when the authenticated identity changes
   useEffect(() => {
     setActiveTab(defaultTab());
     lifecycleAct.reset();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity.id]);
+  }, [fabricIdentity]);
 
   // The "active component" — either freshly found via search or registered
   const activeComponent =
@@ -99,7 +105,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
   ];
   const tabs = allTabs.filter(t => t.allowed);
 
-  const isAuditor = identity.role === 'AUDITOR';
+  const isAuditor = role === 'AUDITOR';
 
   return (
     <main className="page-content" id="main-content">
@@ -135,7 +141,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
             <div className="section-card-header">
               <span className="section-card-title">Role Actions</span>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                {identity.id} · {identity.role}
+                {fabricIdentity} · {role}
               </span>
             </div>
             <div className="section-card-body">
