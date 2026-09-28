@@ -11,27 +11,6 @@ import type {
 } from '../types/component';
 import type { ProvenanceEvent } from '../types/provenance';
 
-// ── Identity header helper ────────────────────────────────────
-// The frontend sends the selected identity via X-Identity header.
-// The BACKEND must enforce real authorization via Fabric identity.
-// This header is a development mechanism only.
-
-function identityHeaders(identityId?: string): Record<string, string> {
-  if (!identityId) return {};
-  return { 'X-Identity': identityId };
-}
-
-// ── Core API client with identity support ─────────────────────
-
-function apiWithIdentity(identityId?: string) {
-  return {
-    get: <T>(path: string, signal?: AbortSignal) =>
-      api.get<T>(path, signal, identityHeaders(identityId)),
-    post: <T>(path: string, body: unknown, signal?: AbortSignal) =>
-      api.post<T>(path, body, signal, identityHeaders(identityId)),
-  };
-}
-
 // ── Day 1 operations ──────────────────────────────────────────
 
 /**
