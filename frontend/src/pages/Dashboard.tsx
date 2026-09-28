@@ -64,7 +64,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
   // Fetch history whenever a component is successfully found/registered
   useEffect(() => {
     if (activeComponent?.componentID) {
-      history.fetch(activeComponent.componentID, identity.id);
+      history.fetch(activeComponent.componentID);
     } else {
       history.clear();
     }
@@ -76,7 +76,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
     if (lifecycleAct.state === 'success' && activeComponentID) {
       // Re-fetch the component to get updated status
       search.search(activeComponentID);
-      history.fetch(activeComponentID, identity.id);
+      history.fetch(activeComponentID);
       overview.refresh();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,7 +124,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                 state={search.state}
                 component={search.component}
                 errorMessage={search.errorMessage}
-                onSearch={(id) => search.search(id, identity.id)}
+                onSearch={(id) => search.search(id)}
                 onClear={search.clear}
               />
             </div>
@@ -190,7 +190,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                       isUnauthorized={lifecycleAct.isUnauthorized}
                       isInvalidState={lifecycleAct.isInvalidState}
                       onSubmit={(p) => lifecycleAct.execute(
-                        (signal) => certifyComponent(activeComponentID, p, signal, identity.id)
+                        (signal) => certifyComponent(activeComponentID, p, signal)
                       )}
                       onReset={lifecycleAct.reset}
                     />
@@ -206,7 +206,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                       isUnauthorized={lifecycleAct.isUnauthorized}
                       isInvalidState={lifecycleAct.isInvalidState}
                       onSubmit={(p) => lifecycleAct.execute(
-                        (signal) => shipComponent(activeComponentID, p, signal, identity.id)
+                        (signal) => shipComponent(activeComponentID, p, signal)
                       )}
                       onReset={lifecycleAct.reset}
                     />
@@ -222,7 +222,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                       isUnauthorized={lifecycleAct.isUnauthorized}
                       isInvalidState={lifecycleAct.isInvalidState}
                       onSubmit={(p) => lifecycleAct.execute(
-                        (signal) => receiveComponent(activeComponentID, p, signal, identity.id)
+                        (signal) => receiveComponent(activeComponentID, p, signal)
                       )}
                       onReset={lifecycleAct.reset}
                     />
@@ -238,7 +238,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                       isUnauthorized={lifecycleAct.isUnauthorized}
                       isInvalidState={lifecycleAct.isInvalidState}
                       onSubmit={(p) => lifecycleAct.execute(
-                        (signal) => transferCustody(activeComponentID, p, signal, identity.id)
+                        (signal) => transferCustody(activeComponentID, p, signal)
                       )}
                       onReset={lifecycleAct.reset}
                     />
@@ -254,7 +254,7 @@ export function Dashboard({ networkStatus }: DashboardProps) {
                       isUnauthorized={lifecycleAct.isUnauthorized}
                       isInvalidState={lifecycleAct.isInvalidState}
                       onSubmit={(p) => lifecycleAct.execute(
-                        (signal) => assembleComponent(activeComponentID, p, signal, identity.id)
+                        (signal) => assembleComponent(activeComponentID, p, signal)
                       )}
                       onReset={lifecycleAct.reset}
                     />
