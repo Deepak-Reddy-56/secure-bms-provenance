@@ -30,7 +30,7 @@ const PAGE_LABELS: Record<Page, string> = {
   provenance:  'Provenance',
   audit:       'Audit Log',
   network:     'Network',
-  settings:    'Settings',
+  settings:    'Administration',
 };
 
 const NETWORK_LABELS: Record<NetworkStatus, string> = {
