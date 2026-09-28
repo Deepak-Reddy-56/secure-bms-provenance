@@ -24,14 +24,14 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 function AppInner() {
-  const [currentPage, setCurrentPage] = useState<Page>('overview');
-
-  const { fabricIdentity } = useAuth();
+  const { fabricIdentity, isAdmin } = useAuth();
+  const [currentPage, setCurrentPage] = useState<Page>(
+    isAdmin ? 'settings' : 'overview'
+  );
   const { setIdentityById } = useIdentity();
 
   const { status, health, refresh } = useNetworkStatus();
 
-  // Synchronize the Fabric identity assigned by the backend.
   useEffect(() => {
     if (fabricIdentity) {
       setIdentityById(fabricIdentity);
@@ -75,9 +75,13 @@ function AppInner() {
       case 'settings':
         return (
           <div className="empty-state">
-            <p className="empty-state-title">Settings</p>
+            <p className="empty-state-title">
+              {isAdmin ? 'Administrator' : 'Settings'}
+            </p>
             <p className="empty-state-desc">
-              Configuration options for the provenance platform.
+              {isAdmin
+                ? 'User and role management will be available here.'
+                : 'Configuration options for the provenance platform.'}
             </p>
           </div>
         );
