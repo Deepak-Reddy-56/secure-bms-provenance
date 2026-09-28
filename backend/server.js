@@ -264,6 +264,7 @@ const server = http.createServer(async (req, res) => {
             name: user.name,
             picture: user.picture,
           },
+          role: user.role,
           fabricIdentity: user.fabricIdentity,
           isAdmin: user.isAdmin === true,
         }));
@@ -349,6 +350,7 @@ const server = http.createServer(async (req, res) => {
           name: session.name,
           picture: session.picture,
         },
+        role: session.role,
         fabricIdentity: session.fabricIdentity,
         isAdmin: session.isAdmin === true,
       }));
