@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useComponentSearch } from '../hooks/useComponent';
-import { useIdentity } from '../context/IdentityContext';
 import type { ComponentStatus } from '../types/component';
 
 const STAGES: ComponentStatus[] = ['MANUFACTURED','CERTIFIED','SHIPPED','RECEIVED','TRANSFERRED','ASSEMBLED'];
