@@ -12,6 +12,31 @@ import { AuditPage } from './pages/AuditPage';
 import { NetworkPage } from './pages/NetworkPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
+import type { UserRole } from './types/identity';
+
+const OPERATIONAL_PAGES: Page[] = [
+  'overview',
+  'components',
+  'lifecycle',
+  'provenance',
+];
+
+const ROLE_PAGES: Record<UserRole, Page[]> = {
+  MANUFACTURER: OPERATIONAL_PAGES,
+  CERTIFIER: OPERATIONAL_PAGES,
+  TRANSPORTER: OPERATIONAL_PAGES,
+  WAREHOUSE: OPERATIONAL_PAGES,
+  ASSEMBLER: OPERATIONAL_PAGES,
+  AUDITOR: [...OPERATIONAL_PAGES, 'audit'],
+};
+
+function canAccessPage(page: Page, role: UserRole | null, isAdmin: boolean): boolean {
+  if (isAdmin) {
+    return page === 'settings' || page === 'network';
+  }
+
+  return Boolean(role && ROLE_PAGES[role].includes(page));
+}
 
 const PAGE_TITLES: Record<Page, string> = {
   overview: 'Component Provenance',
@@ -24,16 +49,29 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 function AppInner() {
-  const { isAdmin } = useAuth();
-  const [currentPage, setCurrentPage] = useState<Page>(
-    isAdmin ? 'settings' : 'overview'
-  );
+  const { role, isAdmin } = useAuth();
+  const defaultPage: Page = isAdmin ? 'settings' : 'overview';
+  const [currentPage, setCurrentPage] = useState<Page>(defaultPage);
 
-  const { status, health, refresh } = useNetworkStatus();
+  const { status, health, refresh } = useNetworkStatus(isAdmin);
+
+  const navigate = (page: Page) => {
+    if (canAccessPage(page, role, isAdmin)) {
+      setCurrentPage(page);
+    }
+  };
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!canAccessPage(currentPage, role, isAdmin)) {
+      setCurrentPage(defaultPage);
+    }
+  }, [currentPage, role, isAdmin, defaultPage]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      void refresh();
+    }
+  }, [isAdmin, refresh]);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -41,7 +79,7 @@ function AppInner() {
         return (
           <OverviewPage
             networkStatus={status}
-            onNavigate={setCurrentPage}
+            onNavigate={navigate}
           />
         );
 
@@ -76,7 +114,7 @@ function AppInner() {
   return (
     <AppShell
       currentPage={currentPage}
-      onNavigate={setCurrentPage}
+      onNavigate={navigate}
       networkStatus={status}
       pageTitle={PAGE_TITLES[currentPage]}
     >
