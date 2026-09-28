@@ -29,6 +29,13 @@ const {
   deleteUser,
 } = require('./userAdminService');
 
+const {
+  VALID_ROLES,
+  findUserById,
+} = require('./userStore');
+
+const OPERATIONAL_ROLES = new Set(VALID_ROLES);
+
 
 
 const PORT = process.env.PORT || 3000;
