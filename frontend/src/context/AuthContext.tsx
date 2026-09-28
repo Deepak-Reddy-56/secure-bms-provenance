@@ -7,10 +7,14 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 
+import type { UserRole } from '../types/identity';
 import {
   authenticateWithGoogle,
+  getCurrentSession,
+  logoutFromServer,
   type GoogleAuthUser,
 } from '../services/authService';
+import { ApiError } from '../types/api';
 
 interface GoogleCredentialResponse {
   credential: string;
@@ -18,28 +22,48 @@ interface GoogleCredentialResponse {
 
 interface AuthContextValue {
   user: GoogleAuthUser | null;
+  role: UserRole | null;
   fabricIdentity: string | null;
-  idToken: string | null;
+  isAdmin: boolean;
   loading: boolean;
   authenticated: boolean;
   authError: string | null;
   loginContainerRef: (element: HTMLDivElement | null) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_WORKSPACE_DOMAIN = 'btech.christuniversity.in';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GoogleAuthUser | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [fabricIdentity, setFabricIdentity] = useState<string | null>(null);
-  const [idToken, setIdToken] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [loginElement, setLoginElement] =
     useState<HTMLDivElement | null>(null);
+
+  const applySession = useCallback((session: {
+    user: GoogleAuthUser;
+    role: UserRole | null;
+    fabricIdentity: string | null;
+    isAdmin: boolean;
+  }) => {
+    setUser(session.user);
+    setRole(session.role);
+    setFabricIdentity(session.fabricIdentity);
+    setIsAdmin(session.isAdmin);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setRole(null);
+    setFabricIdentity(null);
+    setIsAdmin(false);
+  }, []);
 
   const handleGoogleCredential = useCallback(
     async ({ credential }: GoogleCredentialResponse) => {
@@ -49,25 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const result = await authenticateWithGoogle(credential);
 
-        setUser(result.user);
-        setFabricIdentity(result.fabricIdentity);
-        setIdToken(credential);
+        applySession(result);
       } catch (error) {
-        setUser(null);
-        setFabricIdentity(null);
-        setIdToken(null);
+        clearSession();
 
-        const message =
+        setAuthError(
           error instanceof Error
             ? error.message
-            : 'Google authentication failed.';
-
-        setAuthError(message);
+            : 'Google authentication failed.'
+        );
       } finally {
         setLoading(false);
       }
     },
-    []
+    [applySession, clearSession]
   );
 
   const loginContainerRef = useCallback(
@@ -77,10 +96,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  /*
-   * Google Identity Services loads asynchronously.
-   * Wait until window.google is available, then render the button.
-   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const session = await getCurrentSession();
+
+        if (!cancelled) {
+          applySession(session);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          clearSession();
+
+          if (!(error instanceof ApiError && error.statusCode === 401)) {
+            setAuthError(
+              error instanceof Error
+                ? error.message
+                : 'Unable to restore the current session.'
+            );
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applySession, clearSession]);
+
   useEffect(() => {
     if (!loginElement || !GOOGLE_CLIENT_ID) {
       return;
@@ -98,7 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleGoogleCredential,
-        hd: GOOGLE_WORKSPACE_DOMAIN,
         auto_select: false,
       });
 
@@ -142,33 +192,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loginElement, handleGoogleCredential]);
 
-  const logout = useCallback(() => {
-    if (window.google) {
-      window.google.accounts.id.disableAutoSelect();
-    }
+  const logout = useCallback(async () => {
+    try {
+      await logoutFromServer();
+    } catch {
+      // Clear local state even when the server is unavailable.
+    } finally {
+      if (window.google) {
+        window.google.accounts.id.disableAutoSelect();
+      }
 
-    setUser(null);
-    setFabricIdentity(null);
-    setIdToken(null);
-    setAuthError(null);
-  }, []);
+      clearSession();
+      setAuthError(null);
+    }
+  }, [clearSession]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) {
       setAuthError('Google client ID is not configured.');
+      setLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        role,
         fabricIdentity,
-        idToken,
+        isAdmin,
         loading,
-        authenticated: Boolean(user && fabricIdentity && idToken),
+        authenticated: Boolean(user),
         authError,
         loginContainerRef,
         logout,
