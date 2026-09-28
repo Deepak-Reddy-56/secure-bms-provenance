@@ -1,6 +1,6 @@
+import { useAuth } from '../../context/AuthContext';
+import { ROLE_LABELS } from '../../types/identity';
 import type { NetworkStatus } from '../../types/component';
-import { useIdentity } from '../../context/IdentityContext';
-import { IdentitySelector } from '../IdentitySelector/IdentitySelector';
 import './Header.css';
 
 interface HeaderProps {
@@ -15,30 +15,90 @@ const ProvenanceIcon = () => (
     fill="none"
     aria-hidden="true"
   >
-    {/* Abstract chain-link / provenance icon */}
-    <rect x="2" y="8" width="5" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <rect x="13" y="8" width="5" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <line x1="7" y1="10" x2="13" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <circle cx="10" cy="4" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <circle cx="10" cy="16" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <line x1="10" y1="6" x2="10" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <line x1="10" y1="12" x2="10" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <rect
+      x="2"
+      y="8"
+      width="5"
+      height="4"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="13"
+      y="8"
+      width="5"
+      height="4"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <line
+      x1="7"
+      y1="10"
+      x2="13"
+      y2="10"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <circle
+      cx="10"
+      cy="4"
+      r="2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <circle
+      cx="10"
+      cy="16"
+      r="2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <line
+      x1="10"
+      y1="6"
+      x2="10"
+      y2="8"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <line
+      x1="10"
+      y1="12"
+      x2="10"
+      y2="14"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
 const statusLabels: Record<NetworkStatus, string> = {
-  connected:    'Connected',
-  connecting:   'Connecting…',
+  connected: 'Connected',
+  connecting: 'Connecting…',
   disconnected: 'Disconnected',
 };
 
 export function Header({ networkStatus }: HeaderProps) {
-  const { identity, roleLabel } = useIdentity();
+  const { user, role, fabricIdentity, isAdmin } = useAuth();
+
+  const roleLabel = isAdmin
+    ? 'Administrator'
+    : role
+      ? ROLE_LABELS[role]
+      : 'Unassigned';
+
+  const identityLabel = isAdmin
+    ? 'Application Admin'
+    : fabricIdentity || 'Unassigned';
 
   return (
     <header className="header" role="banner">
       <div className="header-inner">
-        {/* Brand */}
         <div className="header-brand">
           <div className="header-logo" aria-hidden="true">
             <ProvenanceIcon />
@@ -51,30 +111,30 @@ export function Header({ networkStatus }: HeaderProps) {
           </div>
         </div>
 
-        {/* Right side — identity + network */}
         <div className="header-right">
-          {/* Dev identity selector */}
-          <IdentitySelector />
-
-          {/* Divider */}
-          <div className="header-divider" aria-hidden="true" />
-
-          {/* Identity info display */}
           <div className="header-identity-info">
             <div className="header-identity-row">
+              <span className="header-identity-label">Account</span>
+              <span className="header-identity-value">
+                {user?.email || 'Authenticated account'}
+              </span>
+            </div>
+            <div className="header-identity-row">
               <span className="header-identity-label">Identity</span>
-              <span className="header-identity-value mono">{identity.id}</span>
+              <span className="header-identity-value mono">
+                {identityLabel}
+              </span>
             </div>
             <div className="header-identity-row">
               <span className="header-identity-label">Role</span>
-              <span className={`role-badge ${identity.role}`}>{roleLabel}</span>
+              <span className={`role-badge ${role || 'ADMIN'}`}>
+                {roleLabel}
+              </span>
             </div>
           </div>
 
-          {/* Divider */}
           <div className="header-divider" aria-hidden="true" />
 
-          {/* Network status */}
           <div
             className="network-status-pill"
             aria-label={`Fabric network status: ${statusLabels[networkStatus]}`}
