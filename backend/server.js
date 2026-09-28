@@ -530,8 +530,8 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // ── 4. POST /api/components - Register Component ───────────────────
-    if (req.method === 'POST' && pathname === '/api/components') {
+    // ── 4. POST /api/manufacturer/components - Register Component ───────
+    if (req.method === 'POST' && pathname === '/api/manufacturer/components') {
       if (!hasRole(session, 'MANUFACTURER')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
@@ -587,14 +587,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── 6. Day 2 Lifecycle Endpoints ─────────────────────────────────────
-    if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/certify$/)) {
+    if (req.method === 'POST' && pathname.match(/^\/api\/certifier\/components\/[^\/]+\/certify$/)) {
       if (!hasRole(session, 'CERTIFIER')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Certifier role required.',
         }));
       }
-      const id = decodeURIComponent(pathname.split('/')[3]);
+      const match = pathname.match(/^\/api\/certifier\/components\/([^/]+)\/certify$/);
+      const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
 
       try {
@@ -652,14 +653,15 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/ship$/)) {
+    if (req.method === 'POST' && pathname.match(/^\/api\/transporter\/components\/[^\/]+\/ship$/)) {
       if (!hasRole(session, 'TRANSPORTER')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Transporter role required.',
         }));
       }
-      const id = decodeURIComponent(pathname.split('/')[3]);
+      const match = pathname.match(/^\/api\/transporter\/components\/([^/]+)\/ship$/);
+      const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
 
       try {
@@ -718,14 +720,15 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/receive$/)) {
+    if (req.method === 'POST' && pathname.match(/^\/api\/warehouse\/components\/[^\/]+\/receive$/)) {
       if (!hasRole(session, 'WAREHOUSE')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Warehouse role required.',
         }));
       }
-      const id = decodeURIComponent(pathname.split('/')[3]);
+      const match = pathname.match(/^\/api\/warehouse\/components\/([^/]+)\/receive$/);
+      const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
 
       try {
@@ -781,14 +784,15 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/transfer$/)) {
+    if (req.method === 'POST' && pathname.match(/^\/api\/warehouse\/components\/[^\/]+\/transfer$/)) {
       if (!hasRole(session, 'WAREHOUSE')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Warehouse role required.',
         }));
       }
-      const id = decodeURIComponent(pathname.split('/')[3]);
+      const match = pathname.match(/^\/api\/warehouse\/components\/([^/]+)\/transfer$/);
+      const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
 
       try {
@@ -845,14 +849,15 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (req.method === 'POST' && pathname.match(/\/api\/components\/[^\/]+\/assemble$/)) {
+    if (req.method === 'POST' && pathname.match(/^\/api\/assembler\/components\/[^\/]+\/assemble$/)) {
       if (!hasRole(session, 'ASSEMBLER')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           error: 'Assembler role required.',
         }));
       }
-      const id = decodeURIComponent(pathname.split('/')[3]);
+      const match = pathname.match(/^\/api\/assembler\/components\/([^/]+)\/assemble$/);
+      const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
 
       try {
