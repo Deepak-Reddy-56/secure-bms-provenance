@@ -215,22 +215,7 @@ const server = http.createServer(async (req, res) => {
       }));
     }
 
-    // ── 2. GET /api/health/fabric ───────────────────────────────────────
-    // Public endpoint used by the frontend network indicator.
-    if (req.method === 'GET' && pathname === '/api/health/fabric') {
-      const health = await checkFabricConnection();
-
-      res.writeHead(
-        health.connected ? 200 : 503,
-        { 'Content-Type': 'application/json' }
-      );
-
-      return res.end(JSON.stringify({
-        connected: health.connected,
-        network: health.network,
-        chaincode: health.chaincode
-      }));
-    }
+    // Fabric health is administrator-only and is handled after session authentication.
 
     // ── Google authentication ────────────────────────────────────────────
     if (req.method === 'POST' && pathname === '/api/auth/google') {
@@ -382,6 +367,37 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({
         error: 'Administrator account cannot perform operational Fabric actions.',
       }));
+    }
+
+    if (req.method === 'GET' && pathname === '/api/health/fabric') {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        const health = await checkFabricConnection();
+
+        res.writeHead(
+          health.connected ? 200 : 503,
+          { 'Content-Type': 'application/json' }
+        );
+
+        return res.end(JSON.stringify({
+          connected: health.connected,
+          network: health.network,
+          chaincode: health.chaincode
+        }));
+      } catch (err) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          connected: false,
+          error: cleanFabricError(err)
+        }));
+      }
     }
 
     console.log(
@@ -912,6 +928,35 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           error: msg
         }));
+      }
+    }
+
+    if (req.method === 'GET' && pathname.match(/^\/api\/auditor\/components\/([^/]+)\/history$/)) {
+      if (!hasRole(session, 'AUDITOR')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Auditor role required.',
+        }));
+      }
+
+      const match = pathname.match(/^\/api\/auditor\/components\/([^/]+)\/history$/);
+      const id = decodeURIComponent(match[1]);
+
+      try {
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          identity
+        );
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(historyStr);
+      } catch (err) {
+        const msg = cleanFabricError(err);
+        const code = msg.includes('not found') ? 404 : 500;
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
       }
     }
 
