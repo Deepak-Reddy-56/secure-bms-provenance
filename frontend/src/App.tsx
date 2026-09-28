@@ -24,19 +24,12 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 function AppInner() {
-  const { fabricIdentity, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>(
     isAdmin ? 'settings' : 'overview'
   );
-  const { setIdentityById } = useIdentity();
 
   const { status, health, refresh } = useNetworkStatus();
-
-  useEffect(() => {
-    if (fabricIdentity) {
-      setIdentityById(fabricIdentity);
-    }
-  }, [fabricIdentity, setIdentityById]);
 
   useEffect(() => {
     refresh();
@@ -107,6 +100,7 @@ function AuthGate() {
   const {
     authenticated,
     loading,
+    isAdmin,
   } = useAuth();
 
   if (loading) {
@@ -127,6 +121,10 @@ function AuthGate() {
     return <LoginPage />;
   }
 
+  if (isAdmin) {
+    return <AppInner />;
+  }
+
   return (
     <IdentityProvider>
       <AppInner />
@@ -136,10 +134,8 @@ function AuthGate() {
 
 export default function App() {
   return (
-    <IdentityProvider>
-      <ToastProvider>
-        <AuthGate />
-      </ToastProvider>
-    </IdentityProvider>
+    <ToastProvider>
+      <AuthGate />
+    </ToastProvider>
   );
 }
