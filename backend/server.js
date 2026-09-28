@@ -521,8 +521,6 @@ const server = http.createServer(async (req, res) => {
         }));
       }
       try {
-        const health = await checkFabricConnection();
-
         const componentsOutput = await queryChaincode(
           'GetAllComponents',
           [],
@@ -535,9 +533,6 @@ const server = http.createServer(async (req, res) => {
 
         return res.end(JSON.stringify({
           registeredCount: Array.isArray(components) ? components.length : 0,
-          networkStatus: health.connected ? 'connected' : 'disconnected',
-          network: 'mychannel',
-          chaincode: 'bmsprovenance',
         }));
       } catch (err) {
         console.error('Overview query failed:', err);
