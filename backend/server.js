@@ -359,7 +359,11 @@ const server = http.createServer(async (req, res) => {
 
     const identity = session.fabricIdentity;
 
-    if (session.isAdmin === true && !pathname.startsWith('/api/admin/')) {
+    if (
+      session.isAdmin === true &&
+      !pathname.startsWith('/api/admin/') &&
+      pathname !== '/api/health/fabric'
+    ) {
       res.writeHead(403, {
         'Content-Type': 'application/json',
       });
