@@ -155,7 +155,7 @@ export function ComponentsPage() {
   const [assy, setAssy] = useState({ assembler: identity.id, assemblyID: '', location: '' });
 
   const handleSearch = () => {
-    if (searchInput.trim()) search.search(searchInput.trim(), identity.id);
+    if (searchInput.trim()) search.search(searchInput.trim());
   };
 
   const openConfirm = (props: Omit<ConfirmModalProps, 'onConfirm' | 'onCancel' | 'loading'>, fn: () => void) => {
@@ -173,7 +173,7 @@ export function ComponentsPage() {
 
   const handleSuccess = (msg: string) => {
     addToast(msg, 'success');
-    if (activeID) search.search(activeID, identity.id); // refresh component
+    if (activeID) search.search(activeID); // refresh component
   };
 
   // ── Tab definitions ───────────────────────────────────────────
