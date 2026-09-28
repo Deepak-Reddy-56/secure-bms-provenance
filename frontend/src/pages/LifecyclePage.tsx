@@ -53,12 +53,12 @@ export function LifecyclePage() {
           <label className="form-label" htmlFor="lifecycle-search">Component ID</label>
           <input id="lifecycle-search" type="text" className="form-input mono"
             value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && searchInput.trim()) search.search(searchInput.trim(), identity.id); }}
+            onKeyDown={e => { if (e.key === 'Enter' && searchInput.trim()) search.search(searchInput.trim()); }}
             placeholder="e.g. BMS-2026-001" />
         </div>
         <button className="btn btn-primary" style={{ height: 40, marginTop: 20 }}
           disabled={!searchInput.trim() || search.state === 'searching'}
-          onClick={() => search.search(searchInput.trim(), identity.id)}
+          onClick={() => search.search(searchInput.trim())}
           id="btn-lifecycle-search">
           {search.state === 'searching' ? <><span className="spinner spinner-sm spinner-white" /> Loading…</> : 'Load Lifecycle'}
         </button>
