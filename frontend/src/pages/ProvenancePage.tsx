@@ -97,7 +97,7 @@ export function ProvenancePage() {
   const handleLoad = () => {
     if (!searchInput.trim()) return;
     setLoadedID(searchInput.trim());
-    history.fetch(searchInput.trim(), identity.id);
+    history.fetch(searchInput.trim());
   };
 
   return (
