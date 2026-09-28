@@ -78,7 +78,6 @@ function AppInner() {
       case 'overview':
         return (
           <OverviewPage
-            networkStatus={status}
             onNavigate={navigate}
           />
         );
