@@ -92,10 +92,10 @@ function ConfirmModal({ title, componentID, actor, fromStatus, toStatus, fields,
 
 // ── Form field helper ─────────────────────────────────────────
 
-function Field({ id, label, type = 'text', value, onChange, placeholder, disabled, required = true }: {
+function Field({ id, label, type = 'text', value, onChange, placeholder, disabled, readOnly, required = true }: {
   id: string; label: string; type?: string; value: string;
   onChange: (v: string) => void; placeholder?: string;
-  disabled?: boolean; required?: boolean;
+  disabled?: boolean; readOnly?: boolean; required?: boolean;
 }) {
   return (
     <div className="form-group">
@@ -104,7 +104,7 @@ function Field({ id, label, type = 'text', value, onChange, placeholder, disable
       </label>
       <input id={id} type={type} className={`form-input${type === 'text' && id.includes('id') ? ' mono' : ''}`}
         value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        disabled={disabled} required={required} />
+        disabled={disabled} readOnly={readOnly} required={required} />
     </div>
   );
 }
@@ -143,16 +143,16 @@ export function ComponentsPage() {
   const [cert, setCert] = useState({ certificateID: '', certificationDate: today, complianceReference: '' });
 
   // Ship form state
-  const [ship, setShip] = useState({ transporter: identity.id, from: '', to: '', shipmentID: '', shipmentDate: today });
+  const [ship, setShip] = useState({ from: '', to: '', shipmentID: '', shipmentDate: today });
 
   // Receive form state
-  const [recv, setRecv] = useState({ warehouse: identity.id, location: '', receivedDate: today });
+  const [recv, setRecv] = useState({ location: '', receivedDate: today });
 
   // Transfer form state
-  const [xfr, setXfr] = useState({ from: identity.id, to: '', location: '', transferDate: today });
+  const [xfr, setXfr] = useState({ to: '', location: '', transferDate: today });
 
   // Assemble form state
-  const [assy, setAssy] = useState({ assembler: identity.id, assemblyID: '', location: '' });
+  const [assy, setAssy] = useState({ assemblyID: '', location: '' });
 
   const handleSearch = () => {
     if (searchInput.trim()) search.search(searchInput.trim());
@@ -537,7 +537,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="ship-trnsp" label="Transporter" value={ship.transporter} onChange={v => setShip(p => ({ ...p, transporter: v }))} />
+                        <Field id="ship-trnsp" label="Transporter" value={identity.id} onChange={() => {}} readOnly />
                         <Field id="ship-from" label="From Location" value={ship.from} onChange={v => setShip(p => ({ ...p, from: v }))} placeholder="Bengaluru" />
                         <Field id="ship-to" label="To Location" value={ship.to} onChange={v => setShip(p => ({ ...p, to: v }))} placeholder="Mysuru" />
                         <Field id="ship-sid" label="Shipment ID" value={ship.shipmentID} onChange={v => setShip(p => ({ ...p, shipmentID: v }))} placeholder="SHIP-001" />
@@ -559,7 +559,7 @@ if (currentStatus !== 'TRANSFERRED') {
                       openConfirm({
                         title: 'Receive Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'SHIPPED', toStatus: 'RECEIVED',
-                        fields: [{ label: 'Warehouse', value: recv.warehouse }, { label: 'Location', value: recv.location }],
+                        fields: [{ label: 'Warehouse', value: identity.id }, { label: 'Location', value: recv.location }],
                       }, () => action.execute(sig => receiveComponent(activeID, recv, sig))
                         .then(success => { if(success){handleSuccess(`Component ${activeID} received`);
                       }
@@ -571,7 +571,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="recv-wh" label="Warehouse" value={recv.warehouse} onChange={v => setRecv(p => ({ ...p, warehouse: v }))} />
+                        <Field id="recv-wh" label="Warehouse" value={identity.id} onChange={() => {}} readOnly />
                         <Field id="recv-loc" label="Location" value={recv.location} onChange={v => setRecv(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                         <Field id="recv-date" label="Received Date" type="date" value={recv.receivedDate} onChange={v => setRecv(p => ({ ...p, receivedDate: v }))} />
                       </div>
@@ -590,7 +590,7 @@ if (currentStatus !== 'TRANSFERRED') {
                       openConfirm({
                         title: 'Transfer Custody', componentID: activeID, actor: identity.id,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
-                        fields: [{ label: 'From', value: xfr.from }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
+                        fields: [{ label: 'From', value: identity.id }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
                       }, () => action.execute(sig => transferCustody(activeID, xfr, sig))
                         .then(success => {if(success){handleSuccess(`Custody transferred for ${activeID}`);
                       }
@@ -601,7 +601,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="xfr-from" label="From" value={xfr.from} onChange={v => setXfr(p => ({ ...p, from: v }))} />
+                        <Field id="xfr-from" label="From" value={identity.id} onChange={() => {}} readOnly />
                         <Field id="xfr-to" label="To" value={xfr.to} onChange={v => setXfr(p => ({ ...p, to: v }))} placeholder="assembler1" />
                         <Field id="xfr-loc" label="Location" value={xfr.location} onChange={v => setXfr(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                         <Field id="xfr-date" label="Transfer Date" type="date" value={xfr.transferDate} onChange={v => setXfr(p => ({ ...p, transferDate: v }))} />
@@ -620,7 +620,7 @@ if (currentStatus !== 'TRANSFERRED') {
                       openConfirm({
                         title: 'Assemble Component', componentID: activeID, actor: identity.id,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
-                        fields: [{ label: 'Assembler', value: assy.assembler }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
+                        fields: [{ label: 'Assembler', value: identity.id }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
                       }, () => action.execute(sig => assembleComponent(activeID, assy, sig))
                         .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
                       }
@@ -631,7 +631,7 @@ if (currentStatus !== 'TRANSFERRED') {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="assy-asmblr" label="Assembler" value={assy.assembler} onChange={v => setAssy(p => ({ ...p, assembler: v }))} />
+                        <Field id="assy-asmblr" label="Assembler" value={identity.id} onChange={() => {}} readOnly />
                         <Field id="assy-id" label="Assembly ID" value={assy.assemblyID} onChange={v => setAssy(p => ({ ...p, assemblyID: v }))} placeholder="ASSY-001" />
                         <Field id="assy-loc" label="Location" value={assy.location} onChange={v => setAssy(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                       </div>
