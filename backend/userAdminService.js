@@ -7,11 +7,21 @@ const {
   removeUser,
 } = require('./userStore');
 
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+
 function getUsers() {
   return listUsers();
 }
 
 function createUser({ email, name, role }) {
+  if (
+    ADMIN_EMAIL &&
+    typeof email === 'string' &&
+    email.trim().toLowerCase() === ADMIN_EMAIL
+  ) {
+    throw new Error('Admin account cannot be assigned an operational role.');
+  }
+
   return addUser({
     email,
     name,
