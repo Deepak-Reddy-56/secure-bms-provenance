@@ -43,6 +43,57 @@ function isValidComponentDate(componentID) {
     );
 }
 
+const SHIPMENT_ID_PATTERN = /^SHIP-([A-Z]{4})-(\d{2})(\d{6})-([A-Z]{2,4})-([A-Z]{2,4})$/;
+
+function dateToDDMMYY(dateValue) {
+    const value = String(dateValue || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        throw new Error('Shipment date must use YYYY-MM-DD format.');
+    }
+
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        throw new Error('Shipment date is invalid.');
+    }
+
+    return String(day).padStart(2, '0') +
+        String(month).padStart(2, '0') +
+        String(year).slice(-2);
+}
+
+function validateShipmentID(componentID, shipmentID, shipmentDate, fromCode, toCode) {
+    const componentMatch = componentID.match(/^BMS-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/);
+    if (!componentMatch) {
+        throw new Error('Shipment ID generation requires a canonical BMS component ID.');
+    }
+
+    const [, typeCode, componentNumber] = componentMatch;
+    const origin = String(fromCode || '').trim().toUpperCase();
+    const destination = String(toCode || '').trim().toUpperCase();
+
+    if (!/^[A-Z]{2,4}$/.test(origin) || !/^[A-Z]{2,4}$/.test(destination)) {
+        throw new Error('Shipment location codes must be 2 to 4 uppercase letters.');
+    }
+
+    if (origin === destination) {
+        throw new Error('Origin and destination locations must be different.');
+    }
+
+    const expected =
+        'SHIP-' + typeCode + '-' + componentNumber +
+        dateToDDMMYY(shipmentDate) + '-' + origin + '-' + destination;
+
+    if (!SHIPMENT_ID_PATTERN.test(shipmentID) || shipmentID !== expected) {
+        throw new Error('Shipment ID must be system-generated as ' + expected + '.');
+    }
+}
 function validateNewComponentID(componentID) {
     if (!COMPONENT_ID_PATTERN.test(componentID) || !isValidComponentDate(componentID)) {
         throw new Error(
@@ -190,12 +241,23 @@ class BMSContract extends Contract {
     from,
     to,
     shipmentID,
-    shipmentDate
+    shipmentDate,
+    fromCode,
+    toCode
 ) {
     // Validate required inputs
-    if (!componentID || !from || !to || !shipmentID || !shipmentDate) {
+    if (!componentID || !from || !to || !shipmentID || !shipmentDate ||
+        !fromCode || !toCode) {
         throw new Error('Missing required input.');
     }
+
+    validateShipmentID(
+        componentID,
+        shipmentID,
+        shipmentDate,
+        fromCode,
+        toCode
+    );
 
     // Only Transporter role can ship a component
     const callerRole = ctx.clientIdentity.getAttributeValue('role');
@@ -227,7 +289,9 @@ class BMSContract extends Contract {
     // Update component with shipment information
     component.transporter = transporter;
     component.from = from;
+    component.fromCode = fromCode;
     component.to = to;
+    component.toCode = toCode;
     component.shipmentID = shipmentID;
     component.shipmentDate = shipmentDate;
     component.status = 'SHIPPED';
