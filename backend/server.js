@@ -1139,6 +1139,56 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Task 5: Provenance consistency validation ────────────────────────
+    if (
+      req.method === 'GET' &&
+      pathname.match(/^\/api\/components\/[^/]+\/provenance\/validate$/)
+    ) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+
+      const match = pathname.match(
+        /^\/api\/components\/([^/]+)\/provenance\/validate$/
+      );
+      const id = decodeURIComponent(match[1]);
+
+      try {
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          getFabricReadIdentity(session)
+        );
+
+        const rawHistory = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(rawHistory);
+        const validation = validateProvenance(normalizedHistory);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          componentID: id,
+          ...validation,
+        }));
+      } catch (err) {
+        const msg = cleanFabricError(err);
+
+        if (msg.includes('not found')) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            error: 'Component not found: ' + id,
+          }));
+        }
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: msg,
+        }));
+      }
+    }
+
     // ── 5. GET /api/components/:id - Get Component ─────────────────────
     if (req.method === 'GET' && pathname.startsWith('/api/components/')) {
       if (!hasOperationalAccess(session)) {
