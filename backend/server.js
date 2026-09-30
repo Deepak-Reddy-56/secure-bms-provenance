@@ -1365,9 +1365,11 @@ const server = http.createServer(async (req, res) => {
           [id],
           identity
         );
+        const history = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(history);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(historyStr);
+        return res.end(JSON.stringify(normalizedHistory));
       } catch (err) {
         const msg = cleanFabricError(err);
         const code = msg.includes('not found') ? 404 : 500;
