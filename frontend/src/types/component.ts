@@ -85,14 +85,12 @@ export interface ReceiveComponentPayload {
 }
 
 export interface TransferCustodyPayload {
-  to: string;
-  location: string;
+  locationId: string;
   transferDate: string;
 }
 
 export interface AssembleComponentPayload {
-  assemblyID: string;
-  location: string;
+  locationId: string;
 }
 
 // ── Action result from any lifecycle operation ───────────────
