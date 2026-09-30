@@ -1234,32 +1234,71 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
+        const fromLocation = getLocation(body.fromLocationId, { includeInactive: false });
+        const toLocation = getLocation(body.toLocationId, { includeInactive: false });
+
+        if (!fromLocation || !toLocation) {
+          throw new Error('Origin and destination must be selected from active administrator-configured locations.');
+        }
+
+        if (fromLocation.id === toLocation.id) {
+          throw new Error('Origin and destination locations must be different.');
+        }
+
+        const component = await getComponentFromLedger(id, identity);
+        const { typeConfig } = getComponentTypeFromComponentId(component.componentID);
+        const shipmentDate = body.shipmentDate || new Date().toISOString().split('T')[0];
+
+        const shipmentID = buildShipmentId({
+          componentID: component.componentID,
+          shipmentDate,
+          fromCode: fromLocation.code,
+          toCode: toLocation.code,
+        });
+
+        validateShipmentId({
+          shipmentID,
+          componentID: component.componentID,
+          shipmentDate,
+          fromCode: fromLocation.code,
+          toCode: toLocation.code,
+        });
+
         const { output, txId } = await invokeChaincode(
           'ShipComponent',
           [
             id,
-            body.from,
-            body.to,
-            body.shipmentID,
-            body.shipmentDate
+            fromLocation.name,
+            toLocation.name,
+            shipmentID,
+            shipmentDate,
+            fromLocation.code,
+            toLocation.code
           ],
           identity
         );
 
-        let component;
+        let updatedComponent;
 
         try {
-          component = JSON.parse(output);
+          updatedComponent = JSON.parse(output);
         } catch {
-          component = await getComponentFromLedger(id, identity);
+          updatedComponent = await getComponentFromLedger(id, identity);
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
 
         return res.end(JSON.stringify({
           success: true,
-          message: `Component ${id} shipped successfully`,
-          component,
+          message: 'Component ' + id + ' shipped successfully',
+          component: updatedComponent,
+          componentType: typeConfig.name,
+          componentTypeCode: typeConfig.code,
+          componentNumber: typeConfig.componentNumber,
+          shipmentID,
+          shipmentDate,
+          fromLocation,
+          toLocation,
           txId
         }));
 
@@ -1267,7 +1306,6 @@ const server = http.createServer(async (req, res) => {
         console.error('Shipment failed:', err);
 
         const msg = cleanFabricError(err);
-
         let code = 500;
 
         if (msg.includes('Unauthorized role')) {
@@ -1276,19 +1314,20 @@ const server = http.createServer(async (req, res) => {
           code = 404;
         } else if (
           msg.includes('cannot be shipped') ||
-          msg.includes('Missing required input')
+          msg.includes('Missing required input') ||
+          msg.includes('must be selected') ||
+          msg.includes('must be different') ||
+          msg.includes('Shipment ID') ||
+          msg.includes('canonical BMS component ID') ||
+          msg.includes('component number')
         ) {
           code = 409;
         }
 
         res.writeHead(code, { 'Content-Type': 'application/json' });
-
-        return res.end(JSON.stringify({
-          error: msg
-        }));
+        return res.end(JSON.stringify({ error: msg }));
       }
     }
-
     if (req.method === 'POST' && pathname.match(/^\/api\/warehouse\/components\/[^\/]+\/receive$/)) {
       if (!hasRole(session, 'WAREHOUSE')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
