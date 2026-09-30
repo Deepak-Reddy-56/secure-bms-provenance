@@ -32,6 +32,7 @@ const {
 const {
   VALID_ROLES,
   findUserById,
+  listUsers,
 } = require('./userStore');
 
 const {
@@ -59,6 +60,10 @@ const {
   parseComponentId,
   validateComponentIdFormat,
 } = require('./componentId');
+
+const {
+  buildAssemblyId,
+} = require('./assemblyId');
 
 const {
   validateProvenance,
@@ -190,6 +195,22 @@ function hasRole(session, role) {
 
 function getFabricReadIdentity(session) {
   return session.isAdmin === true ? 'auditor1' : session.fabricIdentity;
+}
+
+function getActiveAssembler() {
+  const assembler = listUsers().find(
+    user => user.role === 'ASSEMBLER' && user.active
+  );
+
+  if (!assembler) {
+    return null;
+  }
+
+  return {
+    id: assembler.id,
+    name: assembler.name,
+    fabricIdentity: assembler.fabricIdentity,
+  };
 }
 
 function getComponentTypeFromComponentId(componentID) {
@@ -887,6 +908,30 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Warehouse assembler assignment catalog ───────────────────────────
+    if (req.method === 'GET' && pathname === '/api/warehouse/assembler') {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
+
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          assembler: getActiveAssembler(),
+        }));
+      } catch (err) {
+        console.error('Assembler assignment read failed:', err.message);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Assembler configuration is unavailable.',
+        }));
+      }
+    }
+
     // ── Authenticated component type catalog ─────────────────────────────
     if (req.method === 'GET' && pathname === '/api/component-types') {
       if (!hasOperationalAccess(session)) {
@@ -1484,12 +1529,36 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
+        const assembler = getActiveAssembler();
+
+        if (!assembler) {
+          throw new Error(
+            'No active assembler is configured. Ask the administrator to configure the assembler.'
+          );
+        }
+
+        const location = getLocation(body.locationId, {
+          includeInactive: false,
+        });
+
+        if (!location) {
+          throw new Error(
+            'A valid active transfer location must be selected.'
+          );
+        }
+
+        if (!body.transferDate) {
+          throw new Error('Transfer date is required.');
+        }
+
         const { output, txId } = await invokeChaincode(
           'TransferCustody',
           [
             id,
-            body.to,
-            body.location,
+            assembler.fabricIdentity,
+            location.name,
+            location.code,
+            location.pincode,
             body.transferDate
           ],
           identity
@@ -1549,12 +1618,26 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
+        const location = getLocation(body.locationId, {
+          includeInactive: false,
+        });
+
+        if (!location) {
+          throw new Error(
+            'A valid active assembly location must be selected.'
+          );
+        }
+
+        const assemblyID = buildAssemblyId(id);
+
         const { output, txId } = await invokeChaincode(
           'AssembleComponent',
           [
             id,
-            body.assemblyID,
-            body.location
+            assemblyID,
+            location.name,
+            location.code,
+            location.pincode
           ],
           identity
         );
