@@ -1677,7 +1677,9 @@ const server = http.createServer(async (req, res) => {
           code = 404;
         } else if (
           msg.includes('cannot be assembled') ||
-          msg.includes('Missing required input')
+          msg.includes('Missing required input') ||
+          msg.includes('Assembly ID') ||
+          msg.includes('must be selected')
         ) {
           code = 409;
         }
