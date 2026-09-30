@@ -315,11 +315,8 @@ export function ShipForm({
       .then(items => {
         if (cancelled) return;
         setLocations(items);
-
-        // The exact component origin can be selected from the admin-configured registry.
-        if (items.length > 0 && !fromLocationId) {
-          setFromLocationId(items[0].id);
-        }
+        setFromLocationId('');
+        setToLocationId('');
       })
       .catch(err => {
         if (!cancelled) {
