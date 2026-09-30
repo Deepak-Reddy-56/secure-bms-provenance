@@ -66,11 +66,20 @@ export interface AssembledEvent extends ProvenanceEventBase {
   location: string;
 }
 
+export type ProvenanceCondition = 'VALID' | 'INCOMPLETE' | 'INCONSISTENT';
+
+export interface ProvenanceWarning {
+  title: string;
+  message: string;
+}
+
 export interface ProvenanceValidationResult {
   componentID: string;
   valid: boolean;
   status: 'PROVENANCE VALID' | 'PROVENANCE INVALID';
   message: string;
+  condition: ProvenanceCondition;
+  warning: ProvenanceWarning | null;
   expectedSequence: string[];
   actualSequence: string[];
   completedStages: number;
