@@ -120,7 +120,7 @@ export function ProvenancePage() {
     if (!searchInput.trim()) return;
     setLoadedID(searchInput.trim());
     setValidation(null);
-    setValidationError(null);
+    setValidationError('');
     history.fetch(searchInput.trim());
   };
 
@@ -128,7 +128,7 @@ export function ProvenancePage() {
     if (!loadedID || history.events.length === 0) return;
 
     setValidationLoading(true);
-    setValidationError(null);
+    setValidationError('');
 
     try {
       setValidation(await validateComponentProvenance(loadedID));
