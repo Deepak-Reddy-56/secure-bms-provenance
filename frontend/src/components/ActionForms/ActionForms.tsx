@@ -316,13 +316,10 @@ export function ShipForm({
         if (cancelled) return;
         setLocations(items);
 
-        const currentLocation = componentID.trim().toLowerCase();
-        // The exact component origin is resolved by the backend. Prefer the
-        // first configured location until the transporter selects the route.
+        // The exact component origin can be selected from the admin-configured registry.
         if (items.length > 0 && !fromLocationId) {
           setFromLocationId(items[0].id);
         }
-        void currentLocation;
       })
       .catch(err => {
         if (!cancelled) {
