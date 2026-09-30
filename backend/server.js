@@ -357,6 +357,8 @@ function normalizeProvenanceHistory(history) {
             actor: data.warehouse || 'Unknown',
             warehouse: data.warehouse || 'Unknown',
             location: data.receivedLocation || 'Unknown',
+            locationCode: data.receivedLocationCode || 'Unknown',
+            locationPincode: data.receivedLocationPincode || 'Unknown',
             receivedDate: data.receiptDate || entry.timestamp,
           };
 
@@ -368,6 +370,8 @@ function normalizeProvenanceHistory(history) {
             from: data.custodyFrom || 'Unknown',
             to: data.custodyTo || 'Unknown',
             location: data.custodyLocation || 'Unknown',
+            locationCode: data.custodyLocationCode || 'Unknown',
+            locationPincode: data.custodyLocationPincode || 'Unknown',
             transferDate: data.transferDate || entry.timestamp,
           };
 
@@ -379,6 +383,8 @@ function normalizeProvenanceHistory(history) {
             assembler: data.assembler || 'Unknown',
             assemblyID: data.assemblyID || 'Unknown',
             location: data.assemblyLocation || 'Unknown',
+            locationCode: data.assemblyLocationCode || 'Unknown',
+            locationPincode: data.assemblyLocationPincode || 'Unknown',
           };
 
         default:
