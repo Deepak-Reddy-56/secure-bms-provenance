@@ -2,9 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   registerComponent,
   getComponent,
+  verifyComponent,
   getSystemOverview,
 } from '../services/componentService';
-import type { Component, RegisterComponentPayload } from '../types/component';
+import type {
+  Component,
+  ComponentVerificationResult,
+  RegisterComponentPayload,
+} from '../types/component';
 import type { RegistrationState, SearchState, NetworkStatus } from '../types/component';
 import { ApiError } from '../types/api';
 
@@ -69,6 +74,7 @@ export function useRegistration(): UseRegistrationReturn {
 interface UseComponentSearchReturn {
   state: SearchState;
   component: Component | null;
+  verification: ComponentVerificationResult | null;
   errorMessage: string | null;
   search: (componentID: string) => Promise<void>;
   clear: () => void;
@@ -77,6 +83,7 @@ interface UseComponentSearchReturn {
 export function useComponentSearch(): UseComponentSearchReturn {
   const [state, setState] = useState<SearchState>('idle');
   const [component, setComponent] = useState<Component | null>(null);
+  const [verification, setVerification] = useState<ComponentVerificationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -87,11 +94,23 @@ export function useComponentSearch(): UseComponentSearchReturn {
     setState('searching');
     setErrorMessage(null);
     setComponent(null);
+    setVerification(null);
 
     try {
-      const found = await getComponent(componentID, abortRef.current.signal);
-      setComponent(found);
-      setState('found');
+      const result = await verifyComponent(componentID, abortRef.current.signal);
+      setVerification(result);
+
+      if (result.verified && result.component) {
+        setComponent(result.component);
+        setState('found');
+      } else {
+        setState('not_found');
+        setErrorMessage(
+          result.idFormat.valid
+            ? 'The component ID is not registered on the Fabric ledger.'
+            : result.idFormat.message
+        );
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.isNotFound) {
@@ -113,10 +132,11 @@ export function useComponentSearch(): UseComponentSearchReturn {
     if (abortRef.current) abortRef.current.abort();
     setState('idle');
     setComponent(null);
+    setVerification(null);
     setErrorMessage(null);
   }, []);
 
-  return { state, component, errorMessage, search, clear };
+  return { state, component, verification, errorMessage, search, clear };
 }
 
 import { checkFabricHealth } from '../services/componentService';
