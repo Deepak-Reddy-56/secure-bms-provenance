@@ -181,6 +181,11 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
 
   const today = new Date().toISOString().split('T')[0];
   const activeID = search.component?.componentID ?? '';
+  const componentStatus = search.component?.status ?? '';
+  const assemblyPlace =
+    search.component?.assemblyLocation ||
+    search.component?.location ||
+    'the recorded assembly location';
 
   // Register form state
   const [reg, setReg] = useState<RegisterComponentPayload>({
@@ -1192,6 +1197,27 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           </div>
                         </div>
                       )}
+                      {componentStatus !== 'RECEIVED' && componentStatus && (
+                        <div className="alert alert-info" role="status" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">i</span>
+                          <div className="alert-body">
+                            <div className="alert-title">
+                              {componentStatus === 'ASSEMBLED'
+                                ? 'Component Already Assembled'
+                                : componentStatus === 'TRANSFERRED'
+                                  ? 'Custody Already Transferred'
+                                  : 'Transfer Not Available'}
+                            </div>
+                            <div className="alert-message">
+                              {componentStatus === 'ASSEMBLED'
+                                ? 'Component is already assembled at ' + assemblyPlace + '.'
+                                : componentStatus === 'TRANSFERRED'
+                                  ? 'Custody has already been transferred to ' + (search.component?.custodyTo || 'the configured assembler') + '.'
+                                  : 'Custody transfer is available only after warehouse receipt. Current status: ' + componentStatus + '.'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {locationsError && (
                         <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
                           <span className="alert-icon">✕</span>
@@ -1208,6 +1234,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           id="btn-transfer"
                           disabled={
                             !activeID ||
+                            componentStatus !== 'RECEIVED' ||
                             !activeAssembler ||
                             !xfr.locationId ||
                             !xfr.transferDate ||
@@ -1294,6 +1321,21 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           </select>
                         </div>
                       </div>
+                      {componentStatus !== 'TRANSFERRED' && componentStatus && (
+                        <div className="alert alert-info" role="status" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">i</span>
+                          <div className="alert-body">
+                            <div className="alert-title">
+                              {componentStatus === 'ASSEMBLED' ? 'Component Already Assembled' : 'Assembly Not Available'}
+                            </div>
+                            <div className="alert-message">
+                              {componentStatus === 'ASSEMBLED'
+                                ? 'Component is already assembled at ' + assemblyPlace + '.'
+                                : 'Assembly is available only after custody is transferred. Current status: ' + componentStatus + '.'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {locationsError && (
                         <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
                           <span className="alert-icon">✕</span>
@@ -1310,6 +1352,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           id="btn-assemble"
                           disabled={
                             !activeID ||
+                            componentStatus !== 'TRANSFERRED' ||
                             !buildAssemblyIdPreview(activeID) ||
                             !assy.locationId ||
                             locationsLoading
