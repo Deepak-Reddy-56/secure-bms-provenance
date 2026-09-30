@@ -59,7 +59,6 @@ export interface ComponentVerificationResult {
 // ── Day 2 lifecycle action payloads ─────────────────────────
 
 export interface CertifyComponentPayload {
-  certificateID: string;
   certificationDate: string;
   complianceReference: string;
 }
