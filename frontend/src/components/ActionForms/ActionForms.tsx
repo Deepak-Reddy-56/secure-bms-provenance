@@ -201,7 +201,7 @@ function buildShipmentIdPreview(
   fromCode: string,
   toCode: string
 ): string {
-  const match = componentID.trim().toUpperCase().match(/^BMS-([A-Z]{4})-(\\d{2})/);
+  const match = componentID.trim().toUpperCase().match(/^BMS-([A-Z]{4})-(\d{2})/);
   if (!match || !shipmentDate || !fromCode || !toCode) {
     return '';
   }
@@ -215,6 +215,18 @@ function buildShipmentIdPreview(
   return `SHIP-${typeCode}-${componentNumber}${day}${month}${year.slice(-2)}-${fromCode}-${toCode}`;
 }
 
+function buildAssemblyIdPreview(componentID: string): string {
+  const match = componentID.trim().toUpperCase().match(
+    /^BMS-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/
+  );
+
+  if (!match) {
+    return '';
+  }
+
+  const [, typeCode, componentNumber, datePart, serial] = match;
+  return `ASSY-${typeCode}-${componentNumber}${datePart}${serial}`;
+}
 // ── 1. CertifyForm ────────────────────────────────────────────
 
 interface CertifyFormProps {
