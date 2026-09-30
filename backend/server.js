@@ -307,7 +307,8 @@ function normalizeProvenanceHistory(history) {
           return null;
       }
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
 function cleanFabricError(err) {
@@ -1394,9 +1395,11 @@ const server = http.createServer(async (req, res) => {
           [id],
           identity
         );
+        const history = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(history);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(historyStr);
+        return res.end(JSON.stringify(normalizedHistory));
       } catch (err) {
         const msg = cleanFabricError(err);
 
