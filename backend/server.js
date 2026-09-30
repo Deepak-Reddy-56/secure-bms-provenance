@@ -1572,7 +1572,7 @@ const server = http.createServer(async (req, res) => {
 
         if (existingComponent?.status === 'ASSEMBLED') {
           throw new Error(
-            `Component is already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
+            `Component already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
           );
         }
 
