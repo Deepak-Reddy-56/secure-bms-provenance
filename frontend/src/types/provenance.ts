@@ -48,6 +48,8 @@ export interface ReceivedEvent extends ProvenanceEventBase {
   eventType: 'RECEIVED';
   warehouse: string;
   location: string;
+  locationCode?: string;
+  locationPincode?: string;
   receivedDate: string;
 }
 
@@ -56,6 +58,8 @@ export interface TransferredEvent extends ProvenanceEventBase {
   from: string;
   to: string;
   location: string;
+  locationCode?: string;
+  locationPincode?: string;
   transferDate: string;
 }
 
@@ -64,6 +68,8 @@ export interface AssembledEvent extends ProvenanceEventBase {
   assembler: string;
   assemblyID: string;
   location: string;
+  locationCode?: string;
+  locationPincode?: string;
 }
 
 export type ProvenanceCondition = 'VALID' | 'INCOMPLETE' | 'INCONSISTENT';
