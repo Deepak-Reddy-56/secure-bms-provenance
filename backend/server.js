@@ -943,13 +943,14 @@ const server = http.createServer(async (req, res) => {
       const match = pathname.match(/^\/api\/certifier\/components\/([^/]+)\/certify$/);
       const id = decodeURIComponent(match[1]);
       const body = await parseJsonBody(req);
+      const certificateID = `CERT-${id}`;
 
       try {
         const { output, txId } = await invokeChaincode(
           'CertifyComponent',
           [
             id,
-            body.certificateID || 'CERT-001',
+            certificateID,
             body.certificationDate || new Date().toISOString().split('T')[0],
             body.complianceReference || 'ISO-9001'
           ],
