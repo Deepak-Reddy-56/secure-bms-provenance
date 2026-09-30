@@ -74,3 +74,34 @@ test('rejects missing actor, timestamp and location data', () => {
   assert.equal(result.checks.timestampsValid, false);
   assert.equal(result.checks.locationsComplete, false);
 });
+
+
+test('classifies missing lifecycle data as incomplete provenance', () => {
+  const result = validateProvenance(validHistory.slice(0, 3));
+  assert.equal(result.condition, 'INCOMPLETE');
+  assert.equal(result.warning?.title, 'Incomplete provenance');
+  assert.match(result.warning?.message || '', /Required lifecycle events/);
+});
+
+test('classifies an unexpected event order as provenance inconsistency', () => {
+  const result = validateProvenance([
+    event('MANUFACTURED'),
+    event('CERTIFIED'),
+    event('RECEIVED'),
+    event('SHIPPED'),
+    event('TRANSFERRED'),
+    event('ASSEMBLED'),
+  ]);
+  assert.equal(result.condition, 'INCONSISTENT');
+  assert.equal(result.warning?.title, 'Provenance inconsistency detected');
+});
+
+test('classifies missing required provenance fields as incomplete provenance', () => {
+  const result = validateProvenance(
+    validHistory.map((item, index) =>
+      index === 1 ? event('CERTIFIED', { complianceReference: '' }) : item
+    )
+  );
+  assert.equal(result.condition, 'INCOMPLETE');
+  assert.equal(result.warning?.title, 'Incomplete provenance');
+});
