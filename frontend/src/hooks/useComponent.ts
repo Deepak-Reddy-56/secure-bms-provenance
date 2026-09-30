@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   registerComponent,
-  getComponent,
   verifyComponent,
   getSystemOverview,
 } from '../services/componentService';
