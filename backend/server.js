@@ -414,6 +414,12 @@ function cleanFabricError(err) {
     return msg;
   }
 
+  // This indicates that the running Fabric chaincode and backend were built
+  // from different lifecycle signatures.
+  if (/Expected \d+ parameters, but \d+ have been supplied/i.test(msg)) {
+    return 'Fabric chaincode is out of sync with the backend. Restart the backend and redeploy the current chaincode.';
+  }
+
   // Normalize common lifecycle messages
   if (msg.includes('already assembled')) {
     return 'Component already assembled.';
