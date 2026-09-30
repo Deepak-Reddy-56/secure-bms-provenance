@@ -13,9 +13,11 @@
  *  4. Never fakes success — all data comes from the backend response
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import type { ReactNode } from 'react';
+import type { LocationConfig } from '../../types/location';
+import { getLocations } from '../../services/locationService';
 import type {
   CertifyComponentPayload,
   ShipComponentPayload,
@@ -191,6 +193,26 @@ function ActionFormWrapper({
   );
 }
 
+function buildShipmentIdPreview(
+  componentID: string,
+  shipmentDate: string,
+  fromCode: string,
+  toCode: string
+): string {
+  const match = componentID.trim().toUpperCase().match(/^BMS-([A-Z]{4})-(\\d{2})/);
+  if (!match || !shipmentDate || !fromCode || !toCode) {
+    return '';
+  }
+
+  const [, typeCode, componentNumber] = match;
+  const [year, month, day] = shipmentDate.split('-');
+  if (!year || !month || !day) {
+    return '';
+  }
+
+  return `SHIP-${typeCode}-${componentNumber}${day}${month}${year.slice(-2)}-${fromCode}-${toCode}`;
+}
+
 // ── 1. CertifyForm ────────────────────────────────────────────
 
 interface CertifyFormProps {
@@ -277,16 +299,65 @@ export function ShipForm({
 }: ShipFormProps) {
   const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [from,          setFrom]          = useState('');
-  const [to,            setTo]            = useState('');
-  const [shipmentID,    setShipmentID]    = useState('');
-  const [shipmentDate,  setShipmentDate]  = useState(today);
+  const [fromLocationId, setFromLocationId] = useState('');
+  const [toLocationId, setToLocationId] = useState('');
+  const [shipmentDate, setShipmentDate] = useState(today);
+  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
 
   const isSubmitting = state === 'submitting';
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getLocations()
+      .then(items => {
+        if (cancelled) return;
+        setLocations(items);
+
+        const currentLocation = componentID.trim().toLowerCase();
+        // The exact component origin is resolved by the backend. Prefer the
+        // first configured location until the transporter selects the route.
+        if (items.length > 0 && !fromLocationId) {
+          setFromLocationId(items[0].id);
+        }
+        void currentLocation;
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLocationsError(
+            err instanceof Error ? err.message : 'Unable to load configured locations.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [componentID]);
+
+  const fromLocation = locations.find(item => item.id === fromLocationId);
+  const toLocation = locations.find(item => item.id === toLocationId);
+
+  const shipmentID = buildShipmentIdPreview(
+    componentID,
+    shipmentDate,
+    fromLocation?.code || '',
+    toLocation?.code || ''
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ from, to, shipmentID, shipmentDate });
+
+    if (!fromLocationId || !toLocationId || fromLocationId === toLocationId) {
+      return;
+    }
+
+    onSubmit({ fromLocationId, toLocationId, shipmentDate });
   };
 
   return (
@@ -297,18 +368,85 @@ export function ShipForm({
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Ship component form">
         <div className="action-form-grid">
-          <FormField id="ship-component-id" label="Component ID"  value={componentID}  onChange={() => {}} disabled />
-          <FormField id="ship-transporter"  label="Transporter"   value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
-          <FormField id="ship-from"         label="From Location" value={from}         onChange={setFrom}         placeholder="Bengaluru" disabled={isSubmitting} />
-          <FormField id="ship-to"           label="To Location"   value={to}           onChange={setTo}           placeholder="Mysuru" disabled={isSubmitting} />
-          <FormField id="ship-id"           label="Shipment ID"   value={shipmentID}   onChange={setShipmentID}   placeholder="SHIP-001" disabled={isSubmitting} />
-          <FormField id="ship-date"         label="Shipment Date" type="date" value={shipmentDate} onChange={setShipmentDate} disabled={isSubmitting} />
+          <FormField id="ship-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
+          <FormField id="ship-transporter" label="Transporter" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="ship-from">From Location <span className="form-required">*</span></label>
+            <select
+              id="ship-from"
+              className="form-input"
+              value={fromLocationId}
+              onChange={e => setFromLocationId(e.target.value)}
+              disabled={isSubmitting || locationsLoading}
+              required
+            >
+              <option value="">
+                {locationsLoading ? 'Loading locations…' : 'Select origin'}
+              </option>
+              {locations.map(location => (
+                <option key={location.id} value={location.id}>
+                  {location.name} · {location.code} · {location.pincode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="ship-to">To Location <span className="form-required">*</span></label>
+            <select
+              id="ship-to"
+              className="form-input"
+              value={toLocationId}
+              onChange={e => setToLocationId(e.target.value)}
+              disabled={isSubmitting || locationsLoading}
+              required
+            >
+              <option value="">
+                {locationsLoading ? 'Loading locations…' : 'Select destination'}
+              </option>
+              {locations.map(location => (
+                <option key={location.id} value={location.id}>
+                  {location.name} · {location.code} · {location.pincode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <FormField
+            id="ship-id"
+            label="Shipment ID"
+            value={shipmentID}
+            onChange={() => {}}
+            placeholder="Generated from component, route and shipment date"
+            disabled
+          />
+
+          <FormField
+            id="ship-date"
+            label="Shipment Date"
+            type="date"
+            value={shipmentDate}
+            onChange={setShipmentDate}
+            disabled={isSubmitting}
+          />
         </div>
+
+        {locationsError && (
+          <div className="alert alert-error" role="alert">{locationsError}</div>
+        )}
+
         <div>
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !from || !to || !shipmentID}
+            disabled={
+              isSubmitting ||
+              !fromLocationId ||
+              !toLocationId ||
+              fromLocationId === toLocationId ||
+              !shipmentDate
+            }
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting transaction…' : 'Ship Component'}
