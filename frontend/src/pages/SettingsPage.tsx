@@ -16,6 +16,12 @@ import {
   updateAdminComponentTypeStatus,
 } from '../services/componentTypeService';
 import type { ComponentTypeConfig } from '../types/componentType';
+import type { LocationConfig } from '../types/location';
+import {
+  createAdminLocation,
+  getAdminLocations,
+  updateAdminLocationStatus,
+} from '../services/locationService';
 import './SettingsPage.css';
 
 const ROLE_LABELS: Record<AdminRole, string> = {
@@ -56,6 +62,15 @@ export function SettingsPage() {
   const [componentTypeCode, setComponentTypeCode] = useState('');
   const [componentNumber, setComponentNumber] = useState('');
 
+  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationActionId, setLocationActionId] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locationName, setLocationName] = useState('');
+  const [locationCode, setLocationCode] = useState('');
+  const [locationPincode, setLocationPincode] = useState('');
+
   const loadUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -89,6 +104,23 @@ export function SettingsPage() {
   useEffect(() => {
     void loadComponentTypes();
   }, [loadComponentTypes]);
+
+  const loadLocations = useCallback(async () => {
+    setLocationsLoading(true);
+    setLocationError(null);
+
+    try {
+      setLocations(await getAdminLocations());
+    } catch (err) {
+      setLocationError(getErrorMessage(err));
+    } finally {
+      setLocationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
 
   const assignedRoles = useMemo(
     () => new Set(users.map(user => user.role)),
@@ -481,6 +513,207 @@ export function SettingsPage() {
                             disabled={busy}
                           >
                             {busy ? 'Updating…' : componentType.active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="admin-section" aria-labelledby="locations-title">
+        <div className="admin-section-header">
+          <div>
+            <h2 className="admin-section-title" id="locations-title">Location Code Registry</h2>
+            <p className="component-type-subtitle">
+              Administrator-controlled location codes and pincodes used by shipment records and Shipment IDs.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => void loadLocations()}
+            disabled={locationsLoading}
+          >
+            {locationsLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+
+        <div className="admin-section-body">
+          <div className="component-type-rule">
+            <div className="component-type-rule-label">Shipment ID format</div>
+            <div className="component-type-rule-value">SHIP-{'{TYPE4}'}-{'{NUMBER2}'}{'{DDMMYY}'}-{'{FROM}'}-{'{TO}'}</div>
+            <div className="component-type-rule-help">
+              Example: <span className="mono">SHIP-MOTH-01300926-BNG-MYS</span>. Location names, codes and pincodes are selected from this registry.
+            </div>
+          </div>
+
+          <form className="component-type-form" onSubmit={async event => {
+            event.preventDefault();
+
+            if (
+              !locationName.trim() ||
+              !/^[A-Z]{2,4}$/.test(locationCode) ||
+              !/^\d{6}$/.test(locationPincode)
+            ) {
+              return;
+            }
+
+            setLocationSaving(true);
+            setLocationError(null);
+
+            try {
+              const location = await createAdminLocation({
+                name: locationName.trim(),
+                code: locationCode,
+                pincode: locationPincode,
+              });
+
+              setLocations(current => [...current, location]);
+              setLocationName('');
+              setLocationCode('');
+              setLocationPincode('');
+            } catch (err) {
+              setLocationError(getErrorMessage(err));
+            } finally {
+              setLocationSaving(false);
+            }
+          }}>
+            <div className="admin-field">
+              <label htmlFor="location-name">Location Name</label>
+              <input
+                id="location-name"
+                type="text"
+                value={locationName}
+                onChange={event => setLocationName(event.target.value)}
+                placeholder="Bengaluru"
+                disabled={locationSaving}
+                required
+              />
+            </div>
+
+            <div className="admin-field">
+              <label htmlFor="location-code">Location Code</label>
+              <input
+                id="location-code"
+                type="text"
+                value={locationCode}
+                onChange={event => setLocationCode(
+                  event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4)
+                )}
+                placeholder="BNG"
+                maxLength={4}
+                pattern="[A-Z]{2,4}"
+                disabled={locationSaving}
+                required
+              />
+            </div>
+
+            <div className="admin-field">
+              <label htmlFor="location-pincode">Pincode</label>
+              <input
+                id="location-pincode"
+                type="text"
+                inputMode="numeric"
+                value={locationPincode}
+                onChange={event => setLocationPincode(
+                  event.target.value.replace(/\D/g, '').slice(0, 6)
+                )}
+                placeholder="Enter 6-digit pincode"
+                maxLength={6}
+                pattern="[0-9]{6}"
+                disabled={locationSaving}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={
+                locationSaving ||
+                !locationName.trim() ||
+                !/^[A-Z]{2,4}$/.test(locationCode) ||
+                !/^\d{6}$/.test(locationPincode)
+              }
+            >
+              {locationSaving ? 'Adding…' : 'Add Location'}
+            </button>
+          </form>
+
+          {locationError && (
+            <div className="admin-error" role="alert">
+              {locationError}
+            </div>
+          )}
+
+          {locationsLoading ? (
+            <div className="admin-loading">Loading location registry…</div>
+          ) : locations.length === 0 ? (
+            <div className="admin-empty">
+              No locations configured. Add locations such as Bengaluru and Mysuru here before creating shipments.
+            </div>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table component-type-table">
+                <thead>
+                  <tr>
+                    <th>Location</th>
+                    <th>Code</th>
+                    <th>Pincode</th>
+                    <th>Status</th>
+                    <th>Shipment Use</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {locations.map(location => {
+                    const busy = locationActionId === location.id;
+
+                    return (
+                      <tr key={location.id}>
+                        <td>
+                          <div className="admin-user-name">{location.name}</div>
+                        </td>
+                        <td>
+                          <span className="admin-identity">{location.code}</span>
+                        </td>
+                        <td>
+                          <span className="admin-identity">{location.pincode}</span>
+                        </td>
+                        <td>
+                          <span className={'admin-status ' + (location.active ? 'active' : 'inactive')}>
+                            <span className="admin-status-dot" aria-hidden="true" />
+                            {location.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={busy}
+                            onClick={async () => {
+                              setLocationActionId(location.id);
+                              setLocationError(null);
+                              try {
+                                const updated = await updateAdminLocationStatus(
+                                  location.id,
+                                  !location.active
+                                );
+                                setLocations(current =>
+                                  current.map(item => item.id === updated.id ? updated : item)
+                                );
+                              } catch (err) {
+                                setLocationError(getErrorMessage(err));
+                              } finally {
+                                setLocationActionId(null);
+                              }
+                            }}
+                          >
+                            {busy ? 'Updating…' : location.active ? 'Deactivate' : 'Activate'}
                           </button>
                         </td>
                       </tr>
