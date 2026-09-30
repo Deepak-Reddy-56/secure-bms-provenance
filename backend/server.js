@@ -409,6 +409,11 @@ function cleanFabricError(err) {
   // Remove a redundant leading "Error:"
   msg = msg.replace(/^Error:\s*/, '').trim();
 
+  // Preserve location-aware assembly messages from lifecycle prevalidation.
+  if (msg.includes('already assembled at ')) {
+    return msg;
+  }
+
   // Normalize common lifecycle messages
   if (msg.includes('already assembled')) {
     return 'Component already assembled.';
@@ -1557,14 +1562,26 @@ const server = http.createServer(async (req, res) => {
           throw new Error('Transfer date is required.');
         }
 
+        const existingComponent = await getComponentFromLedger(id, identity);
+
+        if (existingComponent?.status === 'ASSEMBLED') {
+          throw new Error(
+            `Component is already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
+          );
+        }
+
+        if (existingComponent?.status === 'TRANSFERRED') {
+          throw new Error(
+            `Custody has already been transferred to ${existingComponent.custodyTo || assembler.fabricIdentity}.`
+          );
+        }
+
         const { output, txId } = await invokeChaincode(
           'TransferCustody',
           [
             id,
             assembler.fabricIdentity,
             location.name,
-            location.code,
-            location.pincode,
             body.transferDate
           ],
           identity
@@ -1638,15 +1655,32 @@ const server = http.createServer(async (req, res) => {
         }
 
         const assemblyID = buildAssemblyId(id);
+        const existingComponent = await getComponentFromLedger(id, identity);
+
+        if (existingComponent?.status === 'ASSEMBLED') {
+          throw new Error(
+            `Component is already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
+          );
+        }
+
+        if (existingComponent?.status !== 'TRANSFERRED') {
+          throw new Error(
+            `Component cannot be assembled. Current status: ${existingComponent?.status || 'UNKNOWN'}`
+          );
+        }
+
+        if (existingComponent.custodyTo && existingComponent.custodyTo !== identity) {
+          throw new Error(
+            'Only the assembler recorded in the custody transfer can assemble this component.'
+          );
+        }
 
         const { output, txId } = await invokeChaincode(
           'AssembleComponent',
           [
             id,
             assemblyID,
-            location.name,
-            location.code,
-            location.pincode
+            location.name
           ],
           identity
         );
