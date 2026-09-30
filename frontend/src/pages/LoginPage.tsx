@@ -14,7 +14,7 @@ export function LoginPage() {
         display: 'grid',
         placeItems: 'center',
         padding: '24px',
-        background: 'var(--bg-primary, #0b0f14)',
+        background: 'var(--bg-primary, #ffffff)',
       }}
     >
       <section
@@ -23,8 +23,8 @@ export function LoginPage() {
           maxWidth: '420px',
           padding: '36px',
           borderRadius: '16px',
-          border: '1px solid var(--border-color, #2a313c)',
-          background: 'var(--bg-secondary, #11161d)',
+          border: '1px solid #ffffff',
+          background: '#000000',
           textAlign: 'center',
         }}
       >
@@ -32,7 +32,7 @@ export function LoginPage() {
           style={{
             margin: 0,
             marginBottom: '10px',
-            color: 'var(--text-primary, #ffffff)',
+            color: '#ffffff',
           }}
         >
           Component Provenance
@@ -42,7 +42,7 @@ export function LoginPage() {
           style={{
             margin: 0,
             marginBottom: '28px',
-            color: 'var(--text-secondary, #9aa4b2)',
+            color: '#ffffff',
           }}
         >
           Sign in with your organization's Google Workspace account.

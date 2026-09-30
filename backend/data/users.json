@@ -1,3 +1,22 @@
 {
-  "users": []
+  "users": [
+    {
+      "id": "49251777-e9b8-4deb-b9c8-68fecc5db25f",
+      "email": "nisargakaratagi1234@gmail.com",
+      "name": "Deepak Reddy",
+      "role": "MANUFACTURER",
+      "fabricIdentity": "manufacturer1",
+      "googleSub": "105402457752529913855",
+      "active": true
+    },
+    {
+      "id": "297fbd00-a47c-46c8-bf73-af8636e45b7e",
+      "email": "deepakreddy91080@gmail.com",
+      "name": "Deepak reddy",
+      "role": "CERTIFIER",
+      "fabricIdentity": "certifier1",
+      "googleSub": "104664146657839622148",
+      "active": true
+    }
+  ]
 }
