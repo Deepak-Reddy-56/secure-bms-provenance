@@ -222,6 +222,94 @@ async function getNextComponentSerial(typeConfig, manufactureDate, identity) {
   return String(nextSerial).padStart(3, '0');
 }
 
+function normalizeProvenanceHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history
+    .filter(entry => entry && entry.data && !entry.isDelete)
+    .map(entry => {
+      const data = entry.data;
+      const status = data.status;
+
+      const base = {
+        eventType: status,
+        timestamp: entry.timestamp,
+        txId: entry.txId,
+        actor: 'Unknown',
+      };
+
+      switch (status) {
+        case 'MANUFACTURED':
+          return {
+            ...base,
+            eventType: 'MANUFACTURED',
+            actor: data.manufacturer || 'Unknown',
+            manufacturer: data.manufacturer || 'Unknown',
+            location: data.location || 'Unknown',
+          };
+
+        case 'CERTIFIED':
+          return {
+            ...base,
+            eventType: 'CERTIFIED',
+            actor: data.certifier || 'Unknown',
+            certificateID: data.certificateID || 'Unknown',
+            certificationDate: data.certificationDate || entry.timestamp,
+            complianceReference: data.complianceReference || 'Unknown',
+          };
+
+        case 'SHIPPED':
+          return {
+            ...base,
+            eventType: 'SHIPPED',
+            actor: data.transporter || 'Unknown',
+            transporter: data.transporter || 'Unknown',
+            from: data.from || 'Unknown',
+            to: data.to || 'Unknown',
+            shipmentID: data.shipmentID || 'Unknown',
+            shipmentDate: data.shipmentDate || entry.timestamp,
+          };
+
+        case 'RECEIVED':
+          return {
+            ...base,
+            eventType: 'RECEIVED',
+            actor: data.warehouse || 'Unknown',
+            warehouse: data.warehouse || 'Unknown',
+            location: data.receivedLocation || 'Unknown',
+            receivedDate: data.receiptDate || entry.timestamp,
+          };
+
+        case 'TRANSFERRED':
+          return {
+            ...base,
+            eventType: 'TRANSFERRED',
+            actor: data.custodyFrom || 'Unknown',
+            from: data.custodyFrom || 'Unknown',
+            to: data.custodyTo || 'Unknown',
+            location: data.custodyLocation || 'Unknown',
+            transferDate: data.transferDate || entry.timestamp,
+          };
+
+        case 'ASSEMBLED':
+          return {
+            ...base,
+            eventType: 'ASSEMBLED',
+            actor: data.assembler || 'Unknown',
+            assembler: data.assembler || 'Unknown',
+            assemblyID: data.assemblyID || 'Unknown',
+            location: data.assemblyLocation || 'Unknown',
+          };
+
+        default:
+          return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 function cleanFabricError(err) {
   let msg = err?.message || String(err);
 
