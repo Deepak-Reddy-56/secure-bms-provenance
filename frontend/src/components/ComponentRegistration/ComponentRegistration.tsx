@@ -1,10 +1,11 @@
-import { useState, useId } from 'react';
+import { useEffect, useState, useId } from 'react';
 import type { RegisterComponentPayload, RegistrationState, Component } from '../../types/component';
+import type { ComponentTypeConfig } from '../../types/componentType';
+import { getComponentTypes } from '../../services/componentTypeService';
 import './ComponentRegistration.css';
 
 interface FormErrors {
-  componentID?: string;
-  componentType?: string;
+  componentTypeId?: string;
   manufacturer?: string;
   manufactureDate?: string;
   location?: string;
@@ -20,25 +21,16 @@ interface ComponentRegistrationProps {
 }
 
 const INITIAL_FORM: RegisterComponentPayload = {
-  componentID:    '',
-  componentType:  '',
-  manufacturer:   '',
+  componentTypeId: '',
+  manufacturer: '',
   manufactureDate: '',
-  location:       '',
+  location: '',
 };
-
-// Basic Component ID format validation: letters/digits/hyphens, min 3 chars
-const COMPONENT_ID_RE = /^[A-Za-z0-9\-_]{3,64}$/;
 
 function validate(form: RegisterComponentPayload): FormErrors {
   const errors: FormErrors = {};
-  if (!form.componentID.trim()) {
-    errors.componentID = 'Component ID is required.';
-  } else if (!COMPONENT_ID_RE.test(form.componentID.trim())) {
-    errors.componentID = 'Component ID must be 3–64 characters (letters, digits, hyphens).';
-  }
-  if (!form.componentType.trim()) {
-    errors.componentType = 'Component type is required.';
+  if (!form.componentTypeId.trim()) {
+    errors.componentTypeId = 'Component type is required.';
   }
   if (!form.manufacturer.trim()) {
     errors.manufacturer = 'Manufacturer is required.';
@@ -69,7 +61,44 @@ export function ComponentRegistration({
 }: ComponentRegistrationProps) {
   const [form, setForm] = useState<RegisterComponentPayload>(INITIAL_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeConfig[]>([]);
+  const [typesLoading, setTypesLoading] = useState(true);
+  const [typesError, setTypesError] = useState<string | null>(null);
   const uid = useId();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getComponentTypes()
+      .then(types => {
+        if (cancelled) return;
+        setComponentTypes(types);
+        setForm(current => ({
+          ...current,
+          componentTypeId: current.componentTypeId || types[0]?.id || '',
+        }));
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setTypesError(
+            err instanceof Error
+              ? err.message
+              : 'Unable to load configured component types.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTypesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedType = componentTypes.find(
+    type => type.id === form.componentTypeId
+  );
 
   const isSubmitting = state === 'submitting';
   const isSuccess    = state === 'success';
@@ -86,17 +115,19 @@ export function ComponentRegistration({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validationErrors = validate(form);
+
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
+
     setErrors({});
+
     onRegister({
-      componentID:    form.componentID.trim(),
-      componentType:  form.componentType.trim(),
-      manufacturer:   form.manufacturer.trim(),
+      componentTypeId: form.componentTypeId.trim(),
+      manufacturer: form.manufacturer.trim(),
       manufactureDate: form.manufactureDate.trim(),
-      location:       form.location.trim(),
+      location: form.location.trim(),
     });
   }
 
@@ -199,56 +230,80 @@ export function ComponentRegistration({
           aria-label="Component registration form"
         >
           <div className="registration-form-grid">
-            {/* Component ID */}
+            {/* Component Type */}
             <div className="form-group full-width">
-              <label className="form-label" htmlFor={`${uid}-componentID`}>
-                Component ID <span className="required-mark" aria-hidden="true">*</span>
+              <label className="form-label" htmlFor={`${uid}-componentType`}>
+                Component Type <span className="required-mark" aria-hidden="true">*</span>
               </label>
-              <input
-                id={`${uid}-componentID`}
-                name="componentID"
-                type="text"
-                className={`form-input mono ${errors.componentID ? 'is-invalid' : ''}`}
-                placeholder="e.g. BMS-2026-001"
-                value={form.componentID}
-                onChange={handleChange}
-                disabled={isSubmitting}
-                autoComplete="off"
+              <select
+                id={`${uid}-componentType`}
+                name="componentTypeId"
+                className={`form-input ${errors.componentTypeId ? 'is-invalid' : ''}`}
+                value={form.componentTypeId}
+                onChange={e => {
+                  const value = e.target.value;
+                  setForm(prev => ({ ...prev, componentTypeId: value }));
+                  if (errors.componentTypeId) {
+                    setErrors(prev => ({ ...prev, componentTypeId: undefined }));
+                  }
+                }}
+                disabled={isSubmitting || typesLoading}
+                required
                 aria-required="true"
-                aria-describedby={errors.componentID ? `${uid}-componentID-err` : undefined}
-                aria-invalid={!!errors.componentID}
-              />
-              {errors.componentID && (
-                <span className="field-error" id={`${uid}-componentID-err`} role="alert">
-                  {errors.componentID}
+              >
+                <option value="">
+                  {typesLoading ? 'Loading component types…' : 'Select component type'}
+                </option>
+                {componentTypes.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.name} · {type.code} · {type.componentNumber}
+                  </option>
+                ))}
+              </select>
+              {errors.componentTypeId && (
+                <span className="field-error" role="alert">
+                  {errors.componentTypeId}
                 </span>
               )}
             </div>
 
-            {/* Component Type */}
-            <div className="form-group">
-              <label className="form-label" htmlFor={`${uid}-componentType`}>
-                Component Type <span className="required-mark" aria-hidden="true">*</span>
-              </label>
-              <input
-                id={`${uid}-componentType`}
-                name="componentType"
-                type="text"
-                className={`form-input ${errors.componentType ? 'is-invalid' : ''}`}
-                placeholder="e.g. BMS Controller"
-                value={form.componentType}
-                onChange={handleChange}
-                disabled={isSubmitting}
-                aria-required="true"
-                aria-describedby={errors.componentType ? `${uid}-componentType-err` : undefined}
-                aria-invalid={!!errors.componentType}
-              />
-              {errors.componentType && (
-                <span className="field-error" id={`${uid}-componentType-err`} role="alert">
-                  {errors.componentType}
-                </span>
-              )}
-            </div>
+            {selectedType && (
+              <div className="form-group full-width">
+                <div className="registration-id-preview">
+                  <div className="success-meta-label">Generated Component ID</div>
+                  <div className="success-panel-id">
+                    BMS-{selectedType.code}-{selectedType.componentNumber}{form.manufactureDate
+                      ? `${form.manufactureDate.slice(8, 10)}${form.manufactureDate.slice(5, 7)}${form.manufactureDate.slice(2, 4)}`
+                      : 'DDMMYY'}001
+                  </div>
+                  <div className="success-meta-label" style={{ marginTop: 'var(--space-2)' }}>
+                    Serial is assigned automatically from 001. The server determines the next available serial at registration time.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {typesError && (
+              <div className="alert alert-error full-width" role="alert">
+                <span className="alert-icon" aria-hidden="true">✕</span>
+                <div className="alert-body">
+                  <div className="alert-title">Component Types Unavailable</div>
+                  <div className="alert-message">{typesError}</div>
+                </div>
+              </div>
+            )}
+
+            {componentTypes.length === 0 && !typesLoading && !typesError && (
+              <div className="alert alert-warning full-width" role="status">
+                <span className="alert-icon" aria-hidden="true">!</span>
+                <div className="alert-body">
+                  <div className="alert-title">No Component Types Configured</div>
+                  <div className="alert-message">
+                    Ask an administrator to configure an active component type before registering a component.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Manufacturer */}
             <div className="form-group">
