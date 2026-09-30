@@ -194,6 +194,14 @@ function humanizeError(err: ApiError): string {
     return 'Component already shipped.';
   }
 
+  if (cleanMessage.includes('No active assembler is configured')) {
+    return 'No active assembler is configured. Ask the administrator to configure the assembler.';
+  }
+
+  if (cleanMessage.includes('Only the assembler recorded in the custody transfer')) {
+    return 'This component is assigned to a different assembler.';
+  }
+
   if (cleanMessage.includes('Unauthorized role')) {
     return 'Unauthorized role.';
   }
