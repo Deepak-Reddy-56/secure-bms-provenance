@@ -1674,7 +1674,10 @@ const server = http.createServer(async (req, res) => {
         const msg = cleanFabricError(err);
         let code = 500;
 
-        if (msg.includes('Unauthorized role')) {
+        if (
+          msg.includes('Unauthorized role') ||
+          msg.includes('Only the assembler recorded in the custody transfer')
+        ) {
           code = 403;
         } else if (msg.includes('not found')) {
           code = 404;
