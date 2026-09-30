@@ -60,6 +60,10 @@ const {
   validateComponentIdFormat,
 } = require('./componentId');
 
+const {
+  validateProvenance,
+} = require('./provenanceValidator');
+
 const OPERATIONAL_ROLES = new Set(VALID_ROLES);
 
 
@@ -302,6 +306,7 @@ function normalizeProvenanceHistory(history) {
             certificateID: data.certificateID || 'Unknown',
             certificationDate: data.certificationDate || entry.timestamp,
             complianceReference: data.complianceReference || 'Unknown',
+            location: data.location || 'Unknown',
           };
 
         case 'SHIPPED':
