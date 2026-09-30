@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useProvenanceHistory } from '../hooks/useLifecycleAction';
 import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
 import { validateComponentProvenance } from '../services/componentService';
@@ -108,13 +108,32 @@ function EventCard({ event }: { event: ProvenanceEvent }) {
   );
 }
 
-export function ProvenancePage() {
-  const [searchInput, setSearchInput] = useState('');
+interface ProvenancePageProps {
+  initialComponentID?: string;
+}
+
+export function ProvenancePage({ initialComponentID = '' }: ProvenancePageProps) {
+  const [searchInput, setSearchInput] = useState(initialComponentID);
   const [loadedID,    setLoadedID]    = useState('');
   const [validation, setValidation] = useState<ProvenanceValidationResult | null>(null);
   const [validationLoading, setValidationLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
   const history = useProvenanceHistory();
+
+  useEffect(() => {
+    const componentID = initialComponentID.trim();
+
+    if (!componentID) {
+      return;
+    }
+
+    setSearchInput(componentID);
+    setLoadedID(componentID);
+    setValidation(null);
+    setValidationError('');
+    setValidationLoading(false);
+    void history.fetch(componentID);
+  }, [initialComponentID, history.fetch]);
 
   const handleLoad = () => {
     if (!searchInput.trim()) return;
