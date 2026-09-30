@@ -138,6 +138,10 @@ function humanizeError(err: ApiError): string {
   );
 
   // Specific lifecycle messages
+  if (cleanMessage.includes('already assembled at ')) {
+    return cleanMessage;
+  }
+
   if (
     cleanMessage === 'Component already assembled.' ||
     cleanMessage.includes(
@@ -170,12 +174,16 @@ function humanizeError(err: ApiError): string {
     return 'Component already received.';
   }
 
+  if (cleanMessage.includes('Custody has already been transferred to ')) {
+    return cleanMessage;
+  }
+
   if (
     cleanMessage.includes(
       'Component cannot be transferred. Current status: TRANSFERRED'
     )
   ) {
-    return 'Component already transferred.';
+    return 'Custody has already been transferred.';
   }
 
   if (
