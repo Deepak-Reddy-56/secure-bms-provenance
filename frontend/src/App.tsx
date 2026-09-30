@@ -61,6 +61,7 @@ function AppInner() {
   const { role, isAdmin } = useAuth();
   const defaultPage: Page = isAdmin ? 'admin-users' : 'overview';
   const [currentPage, setCurrentPage] = useState<Page>(defaultPage);
+  const [provenanceComponentID, setProvenanceComponentID] = useState('');
 
   const { status, health, refresh } = useNetworkStatus(isAdmin);
 
@@ -68,6 +69,15 @@ function AppInner() {
     if (canAccessPage(page, role, isAdmin)) {
       setCurrentPage(page);
     }
+  };
+
+  const openProvenance = (componentID: string) => {
+    if (!canAccessPage('provenance', role, isAdmin)) {
+      return;
+    }
+
+    setProvenanceComponentID(componentID);
+    setCurrentPage('provenance');
   };
 
   useEffect(() => {
@@ -92,13 +102,13 @@ function AppInner() {
         );
 
       case 'components':
-        return <ComponentsPage />;
+        return <ComponentsPage onViewProvenance={openProvenance} />;
 
       case 'lifecycle':
         return <LifecyclePage />;
 
       case 'provenance':
-        return <ProvenancePage />;
+        return <ProvenancePage initialComponentID={provenanceComponentID} />;
 
       case 'audit':
         return <AuditPage />;
