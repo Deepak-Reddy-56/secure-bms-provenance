@@ -9,6 +9,12 @@ export interface Component {
   status: ComponentStatus;
   /** Transaction ID returned by the backend after a successful registration */
   txId?: string;
+  custodyTo?: string;
+  custodyLocation?: string;
+  transferDate?: string;
+  assembler?: string;
+  assemblyID?: string;
+  assemblyLocation?: string;
 }
 
 /** Full Day 2 lifecycle status union */
