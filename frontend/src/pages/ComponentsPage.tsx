@@ -258,7 +258,7 @@ export function ComponentsPage() {
               className="form-input mono"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="e.g. BMS-2026-001"
+              placeholder="e.g. BMS-MOTH-01300926001"
               onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
               disabled={search.state === 'searching'}
             />
@@ -348,8 +348,10 @@ export function ComponentsPage() {
           <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-3)' }}>
             <span className="alert-icon">✕</span>
             <div className="alert-body">
-              <div className="alert-title">Component Not Found</div>
-              <div className="alert-message">{searchInput} could not be located in the provenance ledger.</div>
+              <div className="alert-title">Component Not Verified</div>
+              <div className="alert-message">
+                {search.errorMessage || `${searchInput} could not be verified against the provenance ledger.`}
+              </div>
             </div>
           </div>
         )}
