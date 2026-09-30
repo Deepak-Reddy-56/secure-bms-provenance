@@ -262,15 +262,21 @@ export function ProvenancePage() {
                 ))}
               </div>
 
-              {validation.issues.length > 0 && (
+              {!validation.valid && validation.warning && (
                 <div style={{ marginTop: 'var(--space-4)' }}>
-                  <div className="section-heading">Validation Issues</div>
-                  <div className="alert alert-error" role="alert">
-                    <ul style={{ margin: 0, paddingLeft: 'var(--space-5)' }}>
-                      {validation.issues.map((issue, index) => (
-                        <li key={index} style={{ marginBottom: 'var(--space-1)' }}>{issue}</li>
-                      ))}
-                    </ul>
+                  <div className="alert alert-warning" role="alert">
+                    <span className="alert-icon">!</span>
+                    <div className="alert-body">
+                      <div className="alert-title">{validation.warning.title}</div>
+                      <div className="alert-message">{validation.warning.message}</div>
+                      {validation.issues.length > 0 && (
+                        <ul style={{ margin: 'var(--space-3) 0 0', paddingLeft: 'var(--space-5)' }}>
+                          {validation.issues.map((issue, index) => (
+                            <li key={index} style={{ marginBottom: 'var(--space-1)' }}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
