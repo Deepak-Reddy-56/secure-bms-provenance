@@ -49,9 +49,17 @@ function ShippedFields({ event }: { event: ShippedEvent }) {
     <div className="event-fields">
       <Field label="Actor"         value={event.actor} />
       <Field label="Transporter"   value={event.transporter} />
-      <Field label="From"          value={event.from} />
-      <Field label="To"            value={event.to} />
       <Field label="Shipment ID"   value={event.shipmentID} />
+      <Field
+        label="From"
+        value={event.fromCode ? \`${event.from} (${event.fromCode})\` : event.from}
+      />
+      <Field
+        label="To"
+        value={event.toCode ? \`${event.to} (${event.toCode})\` : event.to}
+      />
+      {event.fromPincode && <Field label="From Pincode" value={event.fromPincode} />}
+      {event.toPincode && <Field label="To Pincode" value={event.toPincode} />}
       <Field label="Shipment Date" value={formatDate(event.shipmentDate)} />
     </div>
   );
