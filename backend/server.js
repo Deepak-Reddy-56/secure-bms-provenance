@@ -785,6 +785,95 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Admin location registry ───────────────────────────────────────────
+    if (pathname.startsWith('/api/admin/locations')) {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        if (req.method === 'GET' && pathname === '/api/admin/locations') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            locations: listLocations({ includeInactive: true }),
+          }));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/admin/locations') {
+          const body = await parseJsonBody(req);
+          const location = createLocation({
+            name: body.name,
+            code: body.code,
+            pincode: body.pincode,
+          });
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ location }));
+        }
+
+        const match = pathname.match(
+          /^\/api\/admin\/locations\/([^/]+)\/status$/
+        );
+
+        if (req.method === 'PUT' && match) {
+          const body = await parseJsonBody(req);
+          const location = setLocationStatus(
+            decodeURIComponent(match[1]),
+            body.active
+          );
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ location }));
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+      } catch (err) {
+        console.error('Admin location request failed:', err.message);
+
+        const msg = err.message || 'Location operation failed.';
+        let code = 500;
+
+        if (msg.includes('already assigned') || msg.includes('already exists')) {
+          code = 409;
+        } else if (msg.includes('required') || msg.includes('must be')) {
+          code = 400;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Authenticated location catalog ─────────────────────────────────
+    if (req.method === 'GET' && pathname === '/api/locations') {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          locations: listLocations({ includeInactive: false }),
+        }));
+      } catch (err) {
+        console.error('Location catalog read failed:', err.message);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Location configuration is unavailable.',
+        }));
+      }
+    }
+
     // ── Authenticated component type catalog ─────────────────────────────
     if (req.method === 'GET' && pathname === '/api/component-types') {
       if (!hasOperationalAccess(session)) {
