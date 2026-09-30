@@ -255,3 +255,61 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ── Component type registry ─────────────────────────────────────────── */
+
+.component-type-subtitle {
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  max-width: 520px;
+}
+
+.component-type-rule {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-ui);
+}
+
+.component-type-rule-label {
+  margin-bottom: var(--space-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.component-type-rule-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.component-type-rule-help {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.component-type-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 180px 180px auto;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-5);
+}
+
+.component-type-table {
+  min-width: 720px;
+}
+
+@media (max-width: 900px) {
+  .component-type-form {
+    grid-template-columns: 1fr;
+  }
+}
