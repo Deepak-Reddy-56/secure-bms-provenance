@@ -111,6 +111,9 @@ function EventCard({ event }: { event: ProvenanceEvent }) {
 export function ProvenancePage() {
   const [searchInput, setSearchInput] = useState('');
   const [loadedID,    setLoadedID]    = useState('');
+  const [validation, setValidation] = useState<ProvenanceValidationResult | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationError, setValidationError] = useState('');
   const history = useProvenanceHistory();
 
   const handleLoad = () => {
