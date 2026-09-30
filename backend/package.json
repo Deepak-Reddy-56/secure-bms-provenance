@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test componentId.test.js shipmentId.test.js"
+    "test": "node --test componentId.test.js shipmentId.test.js provenanceValidator.test.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.12.0",
