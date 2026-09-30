@@ -68,6 +68,31 @@ function dateToDDMMYY(dateValue) {
         String(year).slice(-2);
 }
 
+const ASSEMBLY_ID_PATTERN = /^ASSY-([A-Z]{4})-(\\d{2})(\\d{6})(\\d{3})$/;
+
+function validateAssemblyID(componentID, assemblyID) {
+    const componentMatch = String(componentID || '').match(
+        /^BMS-([A-Z]{4})-(\\d{2})(\\d{6})(\\d{3})$/
+    );
+
+    if (!componentMatch) {
+        throw new Error(
+            'Assembly ID generation requires a canonical BMS component ID.'
+        );
+    }
+
+    const [, typeCode, componentNumber, datePart, serial] = componentMatch;
+    const expected =
+        'ASSY-' + typeCode + '-' +
+        componentNumber + datePart + serial;
+
+    if (!ASSEMBLY_ID_PATTERN.test(assemblyID) || assemblyID !== expected) {
+        throw new Error(
+            'Assembly ID is system-generated and must be ' + expected + '.'
+        );
+    }
+}
+
 function validateShipmentID(componentID, shipmentID, shipmentDate, fromCode, toCode) {
     const componentMatch = componentID.match(/^BMS-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/);
     if (!componentMatch) {
@@ -330,16 +355,33 @@ class BMSContract extends Contract {
         return componentBuffer.toString();
     }
 
-        async TransferCustody(
+    async TransferCustody(
         ctx,
         componentID,
         to,
         location,
+        locationCode,
+        locationPincode,
         transferDate
     ) {
         // Validate required inputs
-        if (!componentID || !to || !location || !transferDate) {
+        if (
+            !componentID ||
+            !to ||
+            !location ||
+            !locationCode ||
+            !locationPincode ||
+            !transferDate
+        ) {
             throw new Error('Missing required input.');
+        }
+
+        if (!/^[A-Z]{2,4}$/.test(String(locationCode))) {
+            throw new Error('Transfer location code must be 2 to 4 uppercase letters.');
+        }
+
+        if (!/^\\d{6}$/.test(String(locationPincode))) {
+            throw new Error('Transfer location pincode must be exactly 6 digits.');
         }
 
         // Only Warehouse role can transfer custody
@@ -376,10 +418,12 @@ class BMSContract extends Contract {
             ctx.clientIdentity.getAttributeValue('hf.EnrollmentID')
             || 'unknown';
 
-        // Record custody transfer
+        // Record the warehouse -> assembler custody handoff.
         component.custodyFrom = from;
         component.custodyTo = to;
         component.custodyLocation = location;
+        component.custodyLocationCode = locationCode;
+        component.custodyLocationPincode = locationPincode;
         component.transferDate = transferDate;
         component.status = 'TRANSFERRED';
 
@@ -451,16 +495,34 @@ class BMSContract extends Contract {
         return JSON.stringify(component);
     }
 
-        async AssembleComponent(
+    async AssembleComponent(
         ctx,
         componentID,
         assemblyID,
-        location
+        location,
+        locationCode,
+        locationPincode
     ) {
         // Validate required inputs
-        if (!componentID || !assemblyID || !location) {
+        if (
+            !componentID ||
+            !assemblyID ||
+            !location ||
+            !locationCode ||
+            !locationPincode
+        ) {
             throw new Error('Missing required input.');
         }
+
+        if (!/^[A-Z]{2,4}$/.test(String(locationCode))) {
+            throw new Error('Assembly location code must be 2 to 4 uppercase letters.');
+        }
+
+        if (!/^\\d{6}$/.test(String(locationPincode))) {
+            throw new Error('Assembly location pincode must be exactly 6 digits.');
+        }
+
+        validateAssemblyID(componentID, assemblyID);
 
         // Only Assembler role can assemble a component
         const callerRole =
@@ -486,24 +548,33 @@ class BMSContract extends Contract {
 
         // Component must have transferred custody
         if (component.status === 'ASSEMBLED') {
-    throw new Error('Component already assembled.');
-}
+            throw new Error('Component already assembled.');
+        }
 
-if (component.status !== 'TRANSFERRED') {
-    throw new Error(
-        `Component cannot be assembled. Current status: ${component.status}`
-    );
-}
+        if (component.status !== 'TRANSFERRED') {
+            throw new Error(
+                `Component cannot be assembled. Current status: ${component.status}`
+            );
+        }
 
-        // Get actual Fabric identity
+        // Only the assembler recorded by the warehouse transfer can complete
+        // the component assembly.
         const assembler =
             ctx.clientIdentity.getAttributeValue('hf.EnrollmentID')
             || 'unknown';
+
+        if (component.custodyTo !== assembler) {
+            throw new Error(
+                'Only the assembler recorded in the custody transfer can assemble this component.'
+            );
+        }
 
         // Record assembly
         component.assembler = assembler;
         component.assemblyID = assemblyID;
         component.assemblyLocation = location;
+        component.assemblyLocationCode = locationCode;
+        component.assemblyLocationPincode = locationPincode;
         component.status = 'ASSEMBLED';
 
         await ctx.stub.putState(
