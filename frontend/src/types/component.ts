@@ -52,8 +52,18 @@ export interface ComponentVerificationResult {
     | 'TYPE_NUMBER_MISMATCH'
     | 'NOT_FOUND'
     | 'NOT_CHECKED';
+  currentHolder: string | null;
   provenanceAvailable: boolean;
   provenanceEventCount: number;
+  provenanceStatus:
+    | 'PROVENANCE VALID'
+    | 'PROVENANCE INVALID'
+    | 'PROVENANCE UNAVAILABLE';
+  provenanceCondition:
+    | 'VALID'
+    | 'INCOMPLETE'
+    | 'INCONSISTENT'
+    | 'UNAVAILABLE';
 }
 
 // ── Day 2 lifecycle action payloads ─────────────────────────
