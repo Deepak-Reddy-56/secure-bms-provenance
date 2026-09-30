@@ -109,7 +109,7 @@ function formatChaincodeArgs(fcn, argsArray = []) {
 async function createComponentOnLedger({ componentID, componentType, manufacturer, manufactureDate, location }, identity) {
   const cArg = formatChaincodeArgs('CreateComponent', [componentID, componentType, manufacturer, manufactureDate, location]);
 
-  const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile /home/deepak/fabric/fabric-samples/test-network/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} --peerAddresses localhost:7051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses localhost:9051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt -c ${cArg}`;
+  const cmd = `/home/deepak/fabric/fabric-samples/bin/peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile /home/deepak/fabric/fabric-samples/test-network/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C ${CHANNEL_NAME} -n ${CHAINCODE_NAME} --peerAddresses localhost:7051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt --peerAddresses localhost:9051 --tlsRootCertFiles /home/deepak/fabric/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt --waitForEvent --waitForEventTimeout 30s -c ${cArg}`;
 
   const output = await execWSLPeer(cmd, identity);
 
@@ -120,9 +120,6 @@ async function createComponentOnLedger({ componentID, componentType, manufacture
     throw new Error(`Chaincode invocation failed: ${output}`);
   }
 
-  // Parse transaction ID from peer output if available
-  const txId = await getLatestTransactionId(componentID, identity);
-
   return {
     componentID,
     componentType,
@@ -130,7 +127,6 @@ async function createComponentOnLedger({ componentID, componentType, manufacture
     manufactureDate,
     location,
     status: 'MANUFACTURED',
-    txId,
   };
 }
 
