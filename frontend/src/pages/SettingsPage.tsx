@@ -41,7 +41,13 @@ function getErrorMessage(error: unknown): string {
   return 'The operation could not be completed.';
 }
 
-export function SettingsPage() {
+type AdminSection = 'users' | 'componentTypes' | 'locations';
+
+interface SettingsPageProps {
+  section?: AdminSection;
+}
+
+export function SettingsPage({ section = 'users' }: SettingsPageProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -85,8 +91,11 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (section !== 'users') {
+      return;
+    }
     void loadUsers();
-  }, [loadUsers]);
+  }, [loadUsers, section]);
 
   const loadComponentTypes = useCallback(async () => {
     setComponentTypesLoading(true);
@@ -102,8 +111,11 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (section !== 'componentTypes') {
+      return;
+    }
     void loadComponentTypes();
-  }, [loadComponentTypes]);
+  }, [loadComponentTypes, section]);
 
   const loadLocations = useCallback(async () => {
     setLocationsLoading(true);
@@ -119,8 +131,11 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (section !== 'locations') {
+      return;
+    }
     void loadLocations();
-  }, [loadLocations]);
+  }, [loadLocations, section]);
 
   const assignedRoles = useMemo(
     () => new Set(users.map(user => user.role)),
@@ -280,13 +295,23 @@ export function SettingsPage() {
   return (
     <div className="admin-page">
       <div className="admin-header">
-        <h1>Administration</h1>
+        <h1>
+          {section === 'users'
+            ? 'User Management'
+            : section === 'componentTypes'
+              ? 'Component Types'
+              : 'Locations'}
+        </h1>
         <p>
-          Provision operational accounts and manage their Fabric roles.
-          Each operational role is mapped to one configured Fabric identity.
+          {section === 'users'
+            ? 'Provision operational accounts and manage their Fabric roles. Each operational role is mapped to one configured Fabric identity.'
+            : section === 'componentTypes'
+              ? 'Manage administrator-defined component categories, type codes and component numbers used to generate Component IDs.'
+              : 'Manage administrator-defined location names, short codes and pincodes used by shipment records and Shipment IDs.'}
         </p>
       </div>
 
+      {section === 'users' && (
       <section className="admin-kpis" aria-label="Administration summary">
         <div className="admin-kpi">
           <span className="admin-kpi-label">Provisioned Users</span>
@@ -301,7 +326,9 @@ export function SettingsPage() {
           <span className="admin-kpi-value">{inactiveCount}</span>
         </div>
       </section>
+      )}
 
+      {section === 'users' && (
       <section className="admin-section" aria-labelledby="provision-title">
         <div className="admin-section-header">
           <h2 className="admin-section-title" id="provision-title">Provision User</h2>
@@ -373,6 +400,8 @@ export function SettingsPage() {
         </div>
       </section>
 
+      )}
+      {section === 'componentTypes' && (
       <section className="admin-section" aria-labelledby="component-types-title">
         <div className="admin-section-header">
           <div>
@@ -525,6 +554,8 @@ export function SettingsPage() {
         </div>
       </section>
 
+      )}
+      {section === 'locations' && (
       <section className="admin-section" aria-labelledby="locations-title">
         <div className="admin-section-header">
           <div>
@@ -726,6 +757,8 @@ export function SettingsPage() {
         </div>
       </section>
 
+      )}
+      {section === 'users' && (
       <section className="admin-section" aria-labelledby="accounts-title">
         <div className="admin-section-header">
           <h2 className="admin-section-title" id="accounts-title">Operational Accounts</h2>
@@ -846,6 +879,7 @@ export function SettingsPage() {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
