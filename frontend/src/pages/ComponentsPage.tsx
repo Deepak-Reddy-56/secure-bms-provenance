@@ -192,7 +192,7 @@ export function ComponentsPage() {
   }, [permissions.canRegister]);
 
   // Certify form state
-  const [cert, setCert] = useState({ certificateID: '', certificationDate: today, complianceReference: '' });
+  const [cert, setCert] = useState({ certificationDate: today, complianceReference: '' });
 
   // Ship form state
   const [ship, setShip] = useState({ from: '', to: '', shipmentID: '', shipmentDate: today });
@@ -696,17 +696,20 @@ export function ComponentsPage() {
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       const currentStatus = search.component?.status;
 
-if (currentStatus === 'ASSEMBLED') {
-  return;
-}
+                      if (currentStatus !== 'MANUFACTURED') {
+                        addToast('Component must be in MANUFACTURED status before certification', 'warning');
+                        return;
+                      }
 
-if (currentStatus !== 'TRANSFERRED') {
-  return;
-}
+                      const generatedCertificateID = `CERT-${activeID}`;
+
                       openConfirm({
                         title: 'Certify Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'MANUFACTURED', toStatus: 'CERTIFIED',
-                        fields: [{ label: 'Certificate ID', value: cert.certificateID }, { label: 'Compliance', value: cert.complianceReference }],
+                        fields: [
+                          { label: 'Certificate ID', value: generatedCertificateID },
+                          { label: 'Compliance', value: cert.complianceReference },
+                        ],
                       }, () => action.execute(sig => certifyComponent(activeID, cert, sig))
                         .then( success => {if (success){handleSuccess(`Component ${activeID} certified successfully`);
                       }
@@ -718,8 +721,26 @@ if (currentStatus !== 'TRANSFERRED') {
                           <input className="form-input mono" value={activeID || searchInput} disabled
                             placeholder="Search for a component above first" />
                         </div>
-                        <Field id="cert-id" label="Certificate ID" value={cert.certificateID}
-                          onChange={v => setCert(p => ({ ...p, certificateID: v }))} placeholder="CERT-BMS-001" />
+                        <div className="form-group full-width">
+                          <label className="form-label" htmlFor="cert-generated-id">
+                            Certificate ID
+                          </label>
+                          <input
+                            id="cert-generated-id"
+                            type="text"
+                            className="form-input mono"
+                            value={activeID ? `CERT-${activeID}` : ''}
+                            placeholder="Generated automatically from Component ID"
+                            readOnly
+                          />
+                          <div style={{
+                            marginTop: 'var(--space-2)',
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--text-secondary)',
+                          }}>
+                            Generated automatically as CERT-&#123;Component ID&#125; and cannot be entered manually.
+                          </div>
+                        </div>
                         <Field id="cert-date" label="Certification Date" type="date" value={cert.certificationDate}
                           onChange={v => setCert(p => ({ ...p, certificationDate: v }))} />
                         <Field id="cert-comp" label="Compliance Reference" value={cert.complianceReference}
@@ -727,18 +748,18 @@ if (currentStatus !== 'TRANSFERRED') {
                       </div>
                       <div style={{ marginTop: 'var(--space-5)' }}>
                         <button
-  type="submit"
-  className="btn btn-primary"
-  id="btn-assemble"
-  disabled={
-    !assy.assemblyID ||
-    !assy.location ||
-    !search.component ||
-    search.component.status !== 'TRANSFERRED'
-  }
->
-  Assemble Component
-</button>
+                          type="submit"
+                          className="btn btn-primary"
+                          id="btn-certify"
+                          disabled={
+                            !search.component ||
+                            search.component.status !== 'MANUFACTURED' ||
+                            !cert.certificationDate ||
+                            !cert.complianceReference.trim()
+                          }
+                        >
+                          Certify Component
+                        </button>
                       </div>
                     </form>
                   )}
