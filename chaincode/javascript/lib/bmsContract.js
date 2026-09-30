@@ -68,11 +68,11 @@ function dateToDDMMYY(dateValue) {
         String(year).slice(-2);
 }
 
-const ASSEMBLY_ID_PATTERN = /^ASSY-([A-Z]{4})-(\\d{2})(\\d{6})(\\d{3})$/;
+const ASSEMBLY_ID_PATTERN = /^ASSY-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/;
 
 function validateAssemblyID(componentID, assemblyID) {
     const componentMatch = String(componentID || '').match(
-        /^BMS-([A-Z]{4})-(\\d{2})(\\d{6})(\\d{3})$/
+        /^BMS-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/
     );
 
     if (!componentMatch) {
@@ -380,7 +380,7 @@ class BMSContract extends Contract {
             throw new Error('Transfer location code must be 2 to 4 uppercase letters.');
         }
 
-        if (!/^\\d{6}$/.test(String(locationPincode))) {
+        if (!/^\d{6}$/.test(String(locationPincode))) {
             throw new Error('Transfer location pincode must be exactly 6 digits.');
         }
 
@@ -518,7 +518,7 @@ class BMSContract extends Contract {
             throw new Error('Assembly location code must be 2 to 4 uppercase letters.');
         }
 
-        if (!/^\\d{6}$/.test(String(locationPincode))) {
+        if (!/^\d{6}$/.test(String(locationPincode))) {
             throw new Error('Assembly location pincode must be exactly 6 digits.');
         }
 
