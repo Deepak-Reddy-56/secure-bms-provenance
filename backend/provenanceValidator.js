@@ -25,6 +25,7 @@ function validateProvenance(history) {
   const events = Array.isArray(history) ? history : [];
   const actualSequence = events.map(event => event?.eventType || 'UNKNOWN');
   const issues = [];
+  let requiredDataComplete = true;
 
   if (events.length === 0) {
     issues.push('No provenance events were returned from the ledger.');
@@ -68,67 +69,84 @@ function validateProvenance(history) {
     const eventName = event?.eventType || 'UNKNOWN';
 
     if (!hasValue(event?.actor)) {
+      requiredDataComplete = false;
       issues.push('Event ' + eventNumber + ' (' + eventName + ') is missing its actor.');
     }
     if (!validTimestamp(event?.timestamp)) {
+      requiredDataComplete = false;
       issues.push('Event ' + eventNumber + ' (' + eventName + ') has a missing or invalid timestamp.');
     }
     switch (eventName) {
       case 'MANUFACTURED':
         if (!hasValue(event?.location)) {
+          requiredDataComplete = false;
           issues.push('Event ' + eventNumber + ' (MANUFACTURED) is missing its location.');
         }
         if (!hasValue(event?.manufacturer)) {
+          requiredDataComplete = false;
           issues.push('Manufactured event is missing the manufacturer.');
         }
         break;
       case 'CERTIFIED':
         if (!hasValue(event?.location)) {
+          requiredDataComplete = false;
           issues.push('Event ' + eventNumber + ' (CERTIFIED) is missing its location.');
         }
         if (!hasValue(event?.certificateID)) {
+          requiredDataComplete = false;
           issues.push('Certified event is missing the certificate reference.');
         }
         if (!hasValue(event?.complianceReference)) {
+          requiredDataComplete = false;
           issues.push('Certified event is missing the compliance reference.');
         }
         break;
       case 'SHIPPED':
         // A shipment is location-bearing through its origin and destination.
         if (!hasValue(event?.from) || !hasValue(event?.to)) {
+          requiredDataComplete = false;
           issues.push('Shipped event is missing the origin or destination.');
         }
         if (!hasValue(event?.shipmentID)) {
+          requiredDataComplete = false;
           issues.push('Shipped event is missing the shipment reference.');
         }
         if (!validTimestamp(event?.shipmentDate)) {
+          requiredDataComplete = false;
           issues.push('Shipped event has a missing or invalid shipment date.');
         }
         break;
       case 'RECEIVED':
         if (!hasValue(event?.location)) {
+          requiredDataComplete = false;
           issues.push('Event ' + eventNumber + ' (RECEIVED) is missing its location.');
         }
         if (!validTimestamp(event?.receivedDate)) {
+          requiredDataComplete = false;
           issues.push('Received event has a missing or invalid receipt date.');
         }
         break;
       case 'TRANSFERRED':
         if (!hasValue(event?.location)) {
+          requiredDataComplete = false;
           issues.push('Event ' + eventNumber + ' (TRANSFERRED) is missing its location.');
         }
         if (!hasValue(event?.from) || !hasValue(event?.to)) {
+          requiredDataComplete = false;
           issues.push('Transferred event is missing the custody origin or destination.');
         }
         if (!validTimestamp(event?.transferDate)) {
+          requiredDataComplete = false;
           issues.push('Transferred event has a missing or invalid transfer date.');
         }
         break;
       case 'ASSEMBLED':
         if (!hasValue(event?.location)) {
+          requiredDataComplete = false;
           issues.push('Event ' + eventNumber + ' (ASSEMBLED) is missing its location.');
         }
         if (!hasValue(event?.assemblyID)) {
+          requiredDataComplete = false;
           issues.push('Assembled event is missing the assembly reference.');
         }
         break;
@@ -167,7 +185,7 @@ function validateProvenance(history) {
   const valid = uniqueIssues.length === 0;
   const condition = valid
     ? 'VALID'
-    : (!requiredEventsPresent || !actorDataComplete || !timestampsValid || !locationsComplete)
+    : (!requiredEventsPresent || !requiredDataComplete)
       ? 'INCOMPLETE'
       : 'INCONSISTENT';
 
