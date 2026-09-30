@@ -43,6 +43,18 @@ const {
 } = require('./componentTypeStore');
 
 const {
+  listLocations,
+  getLocation,
+  createLocation,
+  setLocationStatus,
+} = require('./locationStore');
+
+const {
+  buildShipmentId,
+  validateShipmentId,
+} = require('./shipmentId');
+
+const {
   buildComponentId,
   parseComponentId,
   validateComponentIdFormat,
@@ -170,6 +182,38 @@ function hasRole(session, role) {
 
 function getFabricReadIdentity(session) {
   return session.isAdmin === true ? 'auditor1' : session.fabricIdentity;
+}
+
+function getComponentTypeFromComponentId(componentID) {
+  const parsed = parseComponentId(componentID);
+
+  if (!parsed || !parsed.validDate) {
+    throw new Error(
+      'Shipment ID generation requires a canonical BMS component ID.'
+    );
+  }
+
+  const typeConfig = findComponentTypeByCode(
+    parsed.typeCode,
+    { includeInactive: true }
+  );
+
+  if (!typeConfig) {
+    throw new Error(
+      `Component type code '${parsed.typeCode}' is not registered.`
+    );
+  }
+
+  if (typeConfig.componentNumber !== parsed.componentNumber) {
+    throw new Error(
+      'Component ID type code and component number do not match the administrator registry.'
+    );
+  }
+
+  return {
+    parsed,
+    typeConfig,
+  };
 }
 
 async function getNextComponentSerial(typeConfig, manufactureDate, identity) {
