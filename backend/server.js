@@ -311,7 +311,11 @@ function normalizeProvenanceHistory(history) {
             actor: data.transporter || 'Unknown',
             transporter: data.transporter || 'Unknown',
             from: data.from || 'Unknown',
+            fromCode: data.fromCode || 'Unknown',
+            fromPincode: data.fromPincode || 'Unknown',
             to: data.to || 'Unknown',
+            toCode: data.toCode || 'Unknown',
+            toPincode: data.toPincode || 'Unknown',
             shipmentID: data.shipmentID || 'Unknown',
             shipmentDate: data.shipmentDate || entry.timestamp,
           };
@@ -1273,7 +1277,9 @@ const server = http.createServer(async (req, res) => {
             shipmentID,
             shipmentDate,
             fromLocation.code,
-            toLocation.code
+            toLocation.code,
+            fromLocation.pincode,
+            toLocation.pincode
           ],
           identity
         );
