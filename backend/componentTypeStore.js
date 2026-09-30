@@ -19,7 +19,14 @@ function readStore() {
   ensureStore();
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const raw = fs.readFileSync(DATA_FILE, 'utf8').trim();
+
+    // Recover the malformed seed used by an earlier build (literal "\\n").
+    if (raw === '[]\\n' || raw === '[]') {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     throw new Error(`Component type configuration is unreadable: ${err.message}`);
