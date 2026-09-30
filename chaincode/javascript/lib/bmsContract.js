@@ -243,12 +243,19 @@ class BMSContract extends Contract {
     shipmentID,
     shipmentDate,
     fromCode,
-    toCode
+    toCode,
+    fromPincode,
+    toPincode
 ) {
     // Validate required inputs
     if (!componentID || !from || !to || !shipmentID || !shipmentDate ||
-        !fromCode || !toCode) {
+        !fromCode || !toCode || !fromPincode || !toPincode) {
         throw new Error('Missing required input.');
+    }
+
+    if (!/^\d{6}$/.test(String(fromPincode)) ||
+        !/^\d{6}$/.test(String(toPincode))) {
+        throw new Error('Shipment location pincodes must be exactly 6 digits.');
     }
 
     validateShipmentID(
@@ -290,8 +297,10 @@ class BMSContract extends Contract {
     component.transporter = transporter;
     component.from = from;
     component.fromCode = fromCode;
+    component.fromPincode = fromPincode;
     component.to = to;
     component.toCode = toCode;
+    component.toPincode = toPincode;
     component.shipmentID = shipmentID;
     component.shipmentDate = shipmentDate;
     component.status = 'SHIPPED';
