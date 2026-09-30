@@ -64,6 +64,10 @@ const {
   validateProvenance,
 } = require('./provenanceValidator');
 
+const {
+  getCurrentHolder,
+} = require('./currentHolder');
+
 const OPERATIONAL_ROLES = new Set(VALID_ROLES);
 
 
@@ -1052,6 +1056,8 @@ const server = http.createServer(async (req, res) => {
 
         let provenanceAvailable = false;
         let provenanceEventCount = 0;
+        let provenanceStatus = 'PROVENANCE UNAVAILABLE';
+        let provenanceCondition = 'UNAVAILABLE';
 
         try {
           const historyStr = await queryChaincode(
@@ -1060,8 +1066,15 @@ const server = http.createServer(async (req, res) => {
             readIdentity
           );
           const history = JSON.parse(historyStr);
-          provenanceEventCount = Array.isArray(history) ? history.length : 0;
+          const normalizedHistory = normalizeProvenanceHistory(history);
+          provenanceEventCount = normalizedHistory.length;
           provenanceAvailable = provenanceEventCount > 0;
+
+          if (provenanceAvailable) {
+            const provenanceValidation = validateProvenance(normalizedHistory);
+            provenanceStatus = provenanceValidation.status;
+            provenanceCondition = provenanceValidation.condition;
+          }
         } catch (historyError) {
           console.warn(
             `Verification history lookup failed for ${id}:`,
@@ -1109,8 +1122,11 @@ const server = http.createServer(async (req, res) => {
               }
             : null,
           typeConfigurationStatus,
+          currentHolder: getCurrentHolder(component),
           provenanceAvailable,
           provenanceEventCount,
+          provenanceStatus,
+          provenanceCondition,
         }));
       } catch (err) {
         const msg = cleanFabricError(err);
@@ -1129,8 +1145,11 @@ const server = http.createServer(async (req, res) => {
             },
             typeConfiguration: null,
             typeConfigurationStatus: 'NOT_FOUND',
+            currentHolder: null,
             provenanceAvailable: false,
             provenanceEventCount: 0,
+            provenanceStatus: 'PROVENANCE UNAVAILABLE',
+            provenanceCondition: 'UNAVAILABLE',
           }));
         }
 
