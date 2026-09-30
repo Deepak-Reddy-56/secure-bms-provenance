@@ -66,6 +66,24 @@ export interface AssembledEvent extends ProvenanceEventBase {
   location: string;
 }
 
+export interface ProvenanceValidationResult {
+  componentID: string;
+  valid: boolean;
+  status: 'PROVENANCE VALID' | 'PROVENANCE INVALID';
+  message: string;
+  expectedSequence: string[];
+  actualSequence: string[];
+  completedStages: number;
+  issues: string[];
+  checks: {
+    sequenceValid: boolean;
+    requiredEventsPresent: boolean;
+    actorDataComplete: boolean;
+    timestampsValid: boolean;
+    locationsComplete: boolean;
+  };
+}
+
 export type ProvenanceEvent =
   | ManufacturedEvent
   | CertifiedEvent
