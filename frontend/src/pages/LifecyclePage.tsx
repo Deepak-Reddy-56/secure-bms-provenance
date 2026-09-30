@@ -24,9 +24,20 @@ const STAGE_ACTORS: Record<string, string> = {
 
 function getStageState(stage: ComponentStatus, current: string): 'completed' | 'current' | 'pending' {
   const order = STAGES;
-  const stageIdx   = order.indexOf(stage);
+  const stageIdx = order.indexOf(stage);
   const currentIdx = order.indexOf(current as ComponentStatus);
-  if (stageIdx < currentIdx)  return 'completed';
+
+  if (currentIdx === -1) {
+    return 'pending';
+  }
+
+  // ASSEMBLED is the terminal lifecycle milestone, so it is shown as
+  // completed rather than as an unresolved current step.
+  if (current === 'ASSEMBLED') {
+    return stageIdx <= currentIdx ? 'completed' : 'pending';
+  }
+
+  if (stageIdx < currentIdx) return 'completed';
   if (stageIdx === currentIdx) return 'current';
   return 'pending';
 }
