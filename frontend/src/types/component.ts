@@ -23,11 +23,37 @@ export type ComponentStatus =
 // ── Day 1 payloads ──────────────────────────────────────────
 
 export interface RegisterComponentPayload {
-  componentID: string;
-  componentType: string;
+  componentTypeId: string;
   manufacturer: string;
   manufactureDate: string;
   location: string;
+}
+
+export interface ComponentVerificationResult {
+  verified: boolean;
+  verificationStatus: 'COMPONENT VERIFIED' | 'COMPONENT NOT VERIFIED';
+  component: Component | null;
+  componentID?: string;
+  idFormat: {
+    valid: boolean;
+    status: 'VALID' | 'INVALID_DATE' | 'LEGACY_OR_INVALID';
+    message: string;
+  };
+  typeConfiguration: {
+    id: string;
+    name: string;
+    code: string;
+    componentNumber: string;
+    active: boolean;
+  } | null;
+  typeConfigurationStatus:
+    | 'REGISTERED'
+    | 'UNKNOWN_TYPE_CODE'
+    | 'TYPE_NUMBER_MISMATCH'
+    | 'NOT_FOUND'
+    | 'NOT_CHECKED';
+  provenanceAvailable: boolean;
+  provenanceEventCount: number;
 }
 
 // ── Day 2 lifecycle action payloads ─────────────────────────
