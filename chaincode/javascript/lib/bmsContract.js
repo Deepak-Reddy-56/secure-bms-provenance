@@ -360,8 +360,6 @@ class BMSContract extends Contract {
         componentID,
         to,
         location,
-        locationCode,
-        locationPincode,
         transferDate
     ) {
         // Validate required inputs
@@ -369,20 +367,11 @@ class BMSContract extends Contract {
             !componentID ||
             !to ||
             !location ||
-            !locationCode ||
-            !locationPincode ||
             !transferDate
         ) {
             throw new Error('Missing required input.');
         }
 
-        if (!/^[A-Z]{2,4}$/.test(String(locationCode))) {
-            throw new Error('Transfer location code must be 2 to 4 uppercase letters.');
-        }
-
-        if (!/^\d{6}$/.test(String(locationPincode))) {
-            throw new Error('Transfer location pincode must be exactly 6 digits.');
-        }
 
         // Only Warehouse role can transfer custody
         const callerRole =
@@ -422,8 +411,6 @@ class BMSContract extends Contract {
         component.custodyFrom = from;
         component.custodyTo = to;
         component.custodyLocation = location;
-        component.custodyLocationCode = locationCode;
-        component.custodyLocationPincode = locationPincode;
         component.transferDate = transferDate;
         component.status = 'TRANSFERRED';
 
@@ -499,28 +486,17 @@ class BMSContract extends Contract {
         ctx,
         componentID,
         assemblyID,
-        location,
-        locationCode,
-        locationPincode
+        location
     ) {
         // Validate required inputs
         if (
             !componentID ||
             !assemblyID ||
-            !location ||
-            !locationCode ||
-            !locationPincode
+            !location
         ) {
             throw new Error('Missing required input.');
         }
 
-        if (!/^[A-Z]{2,4}$/.test(String(locationCode))) {
-            throw new Error('Assembly location code must be 2 to 4 uppercase letters.');
-        }
-
-        if (!/^\d{6}$/.test(String(locationPincode))) {
-            throw new Error('Assembly location pincode must be exactly 6 digits.');
-        }
 
         validateAssemblyID(componentID, assemblyID);
 
@@ -573,8 +549,6 @@ class BMSContract extends Contract {
         component.assembler = assembler;
         component.assemblyID = assemblyID;
         component.assemblyLocation = location;
-        component.assemblyLocationCode = locationCode;
-        component.assemblyLocationPincode = locationPincode;
         component.status = 'ASSEMBLED';
 
         await ctx.stub.putState(
