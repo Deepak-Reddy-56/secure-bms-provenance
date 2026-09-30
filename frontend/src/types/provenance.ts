@@ -35,7 +35,11 @@ export interface ShippedEvent extends ProvenanceEventBase {
   eventType: 'SHIPPED';
   transporter: string;
   from: string;
+  fromCode?: string;
+  fromPincode?: string;
   to: string;
+  toCode?: string;
+  toPincode?: string;
   shipmentID: string;
   shipmentDate: string;
 }
