@@ -28,9 +28,29 @@ function EventCard({ event }: { event: ProvenanceEvent }) {
     fields.push({ label: 'Date',        value: formatDate((event as any).certificationDate) });
   } else if (event.eventType === 'SHIPPED') {
     fields.push({ label: 'Transporter', value: (event as any).transporter });
-    fields.push({ label: 'From',        value: (event as any).from });
-    fields.push({ label: 'To',          value: (event as any).to });
     fields.push({ label: 'Shipment ID', value: (event as any).shipmentID });
+    fields.push({
+      label: 'From',
+      value: (event as any).fromCode
+        ? `${(event as any).from} (${(event as any).fromCode})`
+        : (event as any).from,
+    });
+    fields.push({
+      label: 'To',
+      value: (event as any).toCode
+        ? `${(event as any).to} (${(event as any).toCode})`
+        : (event as any).to,
+    });
+    if ((event as any).fromPincode) {
+      fields.push({ label: 'From Pincode', value: (event as any).fromPincode });
+    }
+    if ((event as any).toPincode) {
+      fields.push({ label: 'To Pincode', value: (event as any).toPincode });
+    }
+    fields.push({
+      label: 'Shipment Date',
+      value: formatDate((event as any).shipmentDate),
+    });
   } else if (event.eventType === 'RECEIVED') {
     fields.push({ label: 'Warehouse',   value: (event as any).warehouse });
     fields.push({ label: 'Location',    value: (event as any).location });
