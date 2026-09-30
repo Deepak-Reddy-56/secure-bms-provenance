@@ -102,6 +102,23 @@ export async function receiveComponent(
   );
 }
 
+export interface OperationalAssembler {
+  id: string;
+  name: string;
+  fabricIdentity: string;
+}
+
+export async function getActiveAssembler(
+  signal?: AbortSignal
+): Promise<OperationalAssembler | null> {
+  const response = await api.get<{ assembler: OperationalAssembler | null }>(
+    '/api/warehouse/assembler',
+    signal
+  );
+
+  return response.assembler;
+}
+
 /**
  * Transfer custody. Calls POST /api/warehouse/components/:id/transfer
  */
