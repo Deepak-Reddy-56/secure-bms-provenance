@@ -73,17 +73,19 @@ function validateProvenance(history) {
     if (!validTimestamp(event?.timestamp)) {
       issues.push('Event ' + eventNumber + ' (' + eventName + ') has a missing or invalid timestamp.');
     }
-    if (!hasValue(event?.location)) {
-      issues.push('Event ' + eventNumber + ' (' + eventName + ') is missing its location.');
-    }
-
     switch (eventName) {
       case 'MANUFACTURED':
+        if (!hasValue(event?.location)) {
+          issues.push('Event ' + eventNumber + ' (MANUFACTURED) is missing its location.');
+        }
         if (!hasValue(event?.manufacturer)) {
           issues.push('Manufactured event is missing the manufacturer.');
         }
         break;
       case 'CERTIFIED':
+        if (!hasValue(event?.location)) {
+          issues.push('Event ' + eventNumber + ' (CERTIFIED) is missing its location.');
+        }
         if (!hasValue(event?.certificateID)) {
           issues.push('Certified event is missing the certificate reference.');
         }
@@ -92,6 +94,7 @@ function validateProvenance(history) {
         }
         break;
       case 'SHIPPED':
+        // A shipment is location-bearing through its origin and destination.
         if (!hasValue(event?.from) || !hasValue(event?.to)) {
           issues.push('Shipped event is missing the origin or destination.');
         }
@@ -103,11 +106,17 @@ function validateProvenance(history) {
         }
         break;
       case 'RECEIVED':
+        if (!hasValue(event?.location)) {
+          issues.push('Event ' + eventNumber + ' (RECEIVED) is missing its location.');
+        }
         if (!validTimestamp(event?.receivedDate)) {
           issues.push('Received event has a missing or invalid receipt date.');
         }
         break;
       case 'TRANSFERRED':
+        if (!hasValue(event?.location)) {
+          issues.push('Event ' + eventNumber + ' (TRANSFERRED) is missing its location.');
+        }
         if (!hasValue(event?.from) || !hasValue(event?.to)) {
           issues.push('Transferred event is missing the custody origin or destination.');
         }
@@ -116,6 +125,9 @@ function validateProvenance(history) {
         }
         break;
       case 'ASSEMBLED':
+        if (!hasValue(event?.location)) {
+          issues.push('Event ' + eventNumber + ' (ASSEMBLED) is missing its location.');
+        }
         if (!hasValue(event?.assemblyID)) {
           issues.push('Assembled event is missing the assembly reference.');
         }
@@ -146,7 +158,20 @@ function validateProvenance(history) {
       requiredEventsPresent: EXPECTED_SEQUENCE.every(stage => actualSequence.includes(stage)),
       actorDataComplete: events.every(event => hasValue(event?.actor)),
       timestampsValid: events.every(event => validTimestamp(event?.timestamp)),
-      locationsComplete: events.every(event => hasValue(event?.location)),
+      locationsComplete: events.every(event => {
+        switch (event?.eventType) {
+          case 'SHIPPED':
+            return hasValue(event?.from) && hasValue(event?.to);
+          case 'MANUFACTURED':
+          case 'CERTIFIED':
+          case 'RECEIVED':
+          case 'TRANSFERRED':
+          case 'ASSEMBLED':
+            return hasValue(event?.location);
+          default:
+            return false;
+        }
+      }),
     },
   };
 }
