@@ -202,6 +202,10 @@ function humanizeError(err: ApiError): string {
     return 'Component already shipped.';
   }
 
+  if (/Expected \d+ parameters, but \d+ have been supplied/i.test(cleanMessage)) {
+    return 'Fabric chaincode is out of sync with the backend. Restart the backend and redeploy the current chaincode.';
+  }
+
   if (cleanMessage.includes('No active assembler is configured')) {
     return 'No active assembler is configured. Ask the administrator to configure the assembler.';
   }
