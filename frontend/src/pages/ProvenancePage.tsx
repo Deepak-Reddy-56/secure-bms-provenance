@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useProvenanceHistory } from '../hooks/useLifecycleAction';
-import type { ProvenanceEvent } from '../types/provenance';
+import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
+import { validateComponentProvenance } from '../services/componentService';
 
 function formatDate(iso: string): string {
   try {
@@ -115,7 +116,28 @@ export function ProvenancePage() {
   const handleLoad = () => {
     if (!searchInput.trim()) return;
     setLoadedID(searchInput.trim());
+    setValidation(null);
+    setValidationError(null);
     history.fetch(searchInput.trim());
+  };
+
+  const handleValidate = async () => {
+    if (!loadedID || history.events.length === 0) return;
+
+    setValidationLoading(true);
+    setValidationError(null);
+
+    try {
+      setValidation(await validateComponentProvenance(loadedID));
+    } catch (err) {
+      setValidationError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to validate provenance.'
+      );
+    } finally {
+      setValidationLoading(false);
+    }
   };
 
   return (
@@ -143,6 +165,116 @@ export function ProvenancePage() {
           <button className="btn btn-ghost" style={{ height: 40, marginTop: 20 }} onClick={history.clear}>Clear</button>
         )}
       </div>
+
+      {/* Provenance consistency validation */}
+      {loadedID && history.events.length > 0 && (
+        <div className="panel" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="panel-header">
+            <div>
+              <span className="panel-title">Provenance Consistency</span>
+              <div style={{
+                marginTop: 'var(--space-1)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--text-secondary)',
+              }}>
+                Validate lifecycle order and required provenance data against the Fabric history.
+              </div>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => void handleValidate()}
+              disabled={validationLoading}
+              id="btn-validate-provenance"
+            >
+              {validationLoading ? 'Validating…' : 'Validate Provenance'}
+            </button>
+          </div>
+
+          {validationError && (
+            <div className="panel-body">
+              <div className="alert alert-error" role="alert">
+                <span className="alert-icon">✕</span>
+                <div className="alert-body">
+                  <div className="alert-title">Validation Failed</div>
+                  <div className="alert-message">{validationError}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {validation && (
+            <div className="panel-body">
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-4)',
+              }}>
+                <div className="kpi-card">
+                  <span className="kpi-label">Result</span>
+                  <span className="kpi-value">{validation.status}</span>
+                  <span className="kpi-sub">{validation.message}</span>
+                </div>
+                <div className="kpi-card">
+                  <span className="kpi-label">Lifecycle Sequence</span>
+                  <span className="kpi-value">
+                    {validation.checks.sequenceValid ? 'Valid' : 'Invalid'}
+                  </span>
+                  <span className="kpi-sub">
+                    {validation.actualSequence.join(' → ') || 'No events'}
+                  </span>
+                </div>
+                <div className="kpi-card">
+                  <span className="kpi-label">Required Events</span>
+                  <span className="kpi-value">
+                    {validation.checks.requiredEventsPresent ? 'Complete' : 'Incomplete'}
+                  </span>
+                  <span className="kpi-sub">
+                    {validation.completedStages} / {validation.expectedSequence.length} stages present
+                  </span>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 'var(--space-2)',
+              }}>
+                {[
+                  ['Actor data', validation.checks.actorDataComplete],
+                  ['Timestamps', validation.checks.timestampsValid],
+                  ['Locations', validation.checks.locationsComplete],
+                ].map(([label, valid]) => (
+                  <div
+                    key={String(label)}
+                    style={{
+                      padding: 'var(--space-3)',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-ui)',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    <strong>{String(valid ? '✓ ' : '✕ ') + String(label)}</strong>
+                  </div>
+                ))}
+              </div>
+
+              {validation.issues.length > 0 && (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                  <div className="section-heading">Validation Issues</div>
+                  <div className="alert alert-error" role="alert">
+                    <ul style={{ margin: 0, paddingLeft: 'var(--space-5)' }}>
+                      {validation.issues.map((issue, index) => (
+                        <li key={index} style={{ marginBottom: 'var(--space-1)' }}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Timeline panel */}
       <div className="panel">
