@@ -27,6 +27,8 @@ import type {
   ActionState,
   LifecycleActionResult,
 } from '../../types/component';
+import { getActiveAssembler } from '../../services/componentService';
+import type { OperationalAssembler } from '../../services/componentService';
 import { StatusBadge } from '../StatusBadge/StatusBadge';
 import './ActionFoms.css';
 
@@ -530,10 +532,27 @@ export function TransferForm({
   const [locationId, setLocationId] = useState('');
   const [transferDate, setTransferDate] = useState(today);
   const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [activeAssembler, setActiveAssembler] = useState<OperationalAssembler | null>(null);
   const [locationsLoading, setLocationsLoading] = useState(true);
   const [locationsError, setLocationsError] = useState<string | null>(null);
 
   const isSubmitting = state === 'submitting';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getActiveAssembler()
+      .then(assembler => {
+        if (!cancelled) setActiveAssembler(assembler);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveAssembler(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [componentID]);
 
   useEffect(() => {
     let cancelled = false;
@@ -582,7 +601,17 @@ export function TransferForm({
         <div className="action-form-grid">
           <FormField id="xfr-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
           <FormField id="xfr-from" label="From" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
-          <FormField id="xfr-to" label="To Assembler" value="Configured assembler" onChange={() => {}} readOnly />
+          <FormField
+            id="xfr-to"
+            label="To Assembler"
+            value={
+              activeAssembler
+                ? activeAssembler.name + ' (' + activeAssembler.fabricIdentity + ')'
+                : 'No active assembler configured'
+            }
+            onChange={() => {}}
+            readOnly
+          />
 
           <div className="form-group">
             <label className="form-label" htmlFor="xfr-location">Transfer Location <span className="form-required">*</span></label>
@@ -616,7 +645,7 @@ export function TransferForm({
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !selectedLocation || locationsLoading}
+            disabled={isSubmitting || !selectedLocation || !activeAssembler || locationsLoading}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting transaction…' : 'Transfer Custody'}
