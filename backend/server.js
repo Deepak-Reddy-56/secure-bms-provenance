@@ -661,10 +661,22 @@ const server = http.createServer(async (req, res) => {
         }));
       }
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        componentTypes: listComponentTypes({ includeInactive: false }),
-      }));
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          componentTypes: listComponentTypes({ includeInactive: false }),
+        }));
+      } catch (err) {
+        console.error('Component type catalog read failed:', err);
+
+        if (!res.headersSent) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+        }
+
+        return res.end(JSON.stringify({
+          error: 'Component type configuration is unavailable.',
+        }));
+      }
     }
 
     // ── 3. GET /api/overview ───────────────────────────────────────────
@@ -1313,6 +1325,11 @@ const server = http.createServer(async (req, res) => {
 
   } catch (err) {
     console.error('Unhandled request error:', err);
+
+    if (res.headersSent) {
+      return;
+    }
+
     res.writeHead(500, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
   }
