@@ -1599,7 +1599,10 @@ const server = http.createServer(async (req, res) => {
           code = 404;
         } else if (
           msg.includes('cannot be transferred') ||
-          msg.includes('Missing required input')
+          msg.includes('Missing required input') ||
+          msg.includes('must be selected') ||
+          msg.includes('Transfer date') ||
+          msg.includes('No active assembler')
         ) {
           code = 409;
         }
