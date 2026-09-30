@@ -64,9 +64,8 @@ export interface CertifyComponentPayload {
 }
 
 export interface ShipComponentPayload {
-  from: string;
-  to: string;
-  shipmentID: string;
+  fromLocationId: string;
+  toLocationId: string;
   shipmentDate: string;
 }
 
