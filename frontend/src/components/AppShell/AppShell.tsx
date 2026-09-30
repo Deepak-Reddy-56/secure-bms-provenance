@@ -13,7 +13,9 @@ export type Page =
   | 'provenance'
   | 'audit'
   | 'network'
-  | 'settings';
+  | 'admin-users'
+  | 'admin-component-types'
+  | 'admin-locations';
 
 interface AppShellProps {
   children: ReactNode;
@@ -29,8 +31,10 @@ const PAGE_LABELS: Record<Page, string> = {
   lifecycle:   'Lifecycle',
   provenance:  'Provenance',
   audit:       'Audit Log',
-  network:     'Network',
-  settings:    'Administration',
+  network:                 'Network',
+  'admin-users':            'User Management',
+  'admin-component-types':  'Component Types',
+  'admin-locations':        'Locations',
 };
 
 const NETWORK_LABELS: Record<NetworkStatus, string> = {
@@ -97,6 +101,24 @@ const icons: Record<string, ReactNode> = {
       <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.93 2.93l1.41 1.41M11.66 11.66l1.41 1.41M2.93 13.07l1.41-1.41M11.66 4.34l1.41-1.41" />
     </svg>
   ),
+  'admin-users': (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="5" r="2.5" />
+      <path d="M3 14c.4-2.6 2.1-4 5-4s4.6 1.4 5 4" />
+    </svg>
+  ),
+  'admin-component-types': (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" />
+      <path d="M8 1v14M2 4.5l6 3.5 6-3.5" />
+    </svg>
+  ),
+  'admin-locations': (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 14s5-4.2 5-8A5 5 0 1 0 3 6c0 3.8 5 8 5 8Z" />
+      <circle cx="8" cy="6" r="1.5" />
+    </svg>
+  ),
   chain: (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="1" y="6" width="5" height="4" rx="0.5" />
@@ -144,7 +166,9 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
 
   const navItems = isAdmin
     ? [
-        { id: 'settings' as Page, label: PAGE_LABELS.settings },
+        { id: 'admin-users' as Page, label: PAGE_LABELS['admin-users'] },
+        { id: 'admin-component-types' as Page, label: PAGE_LABELS['admin-component-types'] },
+        { id: 'admin-locations' as Page, label: PAGE_LABELS['admin-locations'] },
         { id: 'network' as Page, label: PAGE_LABELS.network },
       ]
     : role === 'AUDITOR'
