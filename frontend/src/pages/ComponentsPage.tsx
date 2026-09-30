@@ -8,6 +8,10 @@ import type { ComponentStatus } from '../types/component';
 import type { RegisterComponentPayload } from '../types/component';
 import type { ComponentTypeConfig } from '../types/componentType';
 import type { LocationConfig } from '../types/location';
+
+interface ComponentsPageProps {
+  onViewProvenance?: (componentID: string) => void;
+}
 import { getComponentTypes } from '../services/componentTypeService';
 import { getLocations } from '../services/locationService';
 import {
@@ -138,7 +142,7 @@ function buildShipmentIdPreview(
 
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
-export function ComponentsPage() {
+export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   const { role, fabricIdentity } = useAuth();
 
   if (!role || !fabricIdentity) {
@@ -383,6 +387,18 @@ export function ComponentsPage() {
                 { label: 'Location', value: search.component.location },
                 { label: 'Current Status', value: search.component.status },
                 {
+                  label: 'Current Holder',
+                  value: search.verification.currentHolder || 'Not recorded',
+                },
+                {
+                  label: 'Verification Status',
+                  value: search.verification.verificationStatus,
+                },
+                {
+                  label: 'Provenance Status',
+                  value: search.verification.provenanceStatus,
+                },
+                {
                   label: 'ID Format',
                   value: search.verification.idFormat.valid ? 'Valid' : 'Legacy / Non-standard',
                 },
@@ -410,6 +426,24 @@ export function ComponentsPage() {
                 </div>
               ))}
             </div>
+            {onViewProvenance && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  padding: 'var(--space-4) var(--space-6)',
+                  borderTop: '1px solid var(--border-subtle)',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => onViewProvenance(search.component!.componentID)}
+                >
+                  View Provenance
+                </button>
+              </div>
+            )}
           </div>
         )}
 
