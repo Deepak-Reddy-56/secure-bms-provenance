@@ -527,15 +527,49 @@ export function TransferForm({
 }: TransferFormProps) {
   const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [to,            setTo]            = useState('');
-  const [location,      setLocation]      = useState('');
-  const [transferDate,  setTransferDate]  = useState(today);
+  const [locationId, setLocationId] = useState('');
+  const [transferDate, setTransferDate] = useState(today);
+  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
 
   const isSubmitting = state === 'submitting';
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getLocations()
+      .then(items => {
+        if (cancelled) return;
+        setLocations(items);
+        setLocationId('');
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLocationsError(
+            err instanceof Error ? err.message : 'Unable to load configured locations.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [componentID]);
+
+  const selectedLocation = locations.find(item => item.id === locationId);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ to, location, transferDate });
+
+    if (!selectedLocation) {
+      return;
+    }
+
+    onSubmit({ locationId, transferDate });
   };
 
   return (
@@ -546,17 +580,43 @@ export function TransferForm({
     >
       <form className="action-form" onSubmit={handleSubmit} aria-label="Transfer custody form">
         <div className="action-form-grid">
-          <FormField id="xfr-component-id" label="Component ID"    value={componentID} onChange={() => {}} disabled />
-          <FormField id="xfr-from"         label="From"            value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
-          <FormField id="xfr-to"           label="To"              value={to}          onChange={setTo}          placeholder="assembler1" disabled={isSubmitting} />
-          <FormField id="xfr-location"     label="Location"        value={location}    onChange={setLocation}    placeholder="Mysuru" disabled={isSubmitting} />
-          <FormField id="xfr-date"         label="Transfer Date"   type="date" value={transferDate} onChange={setTransferDate} disabled={isSubmitting} />
+          <FormField id="xfr-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
+          <FormField id="xfr-from" label="From" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
+          <FormField id="xfr-to" label="To Assembler" value="Configured assembler" onChange={() => {}} readOnly />
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="xfr-location">Transfer Location <span className="form-required">*</span></label>
+            <select
+              id="xfr-location"
+              className="form-input"
+              value={locationId}
+              onChange={e => setLocationId(e.target.value)}
+              disabled={isSubmitting || locationsLoading}
+              required
+            >
+              <option value="">
+                {locationsLoading ? 'Loading locations…' : 'Select transfer location'}
+              </option>
+              {locations.map(location => (
+                <option key={location.id} value={location.id}>
+                  {location.name} · {location.code} · {location.pincode}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <FormField id="xfr-date" label="Transfer Date" type="date" value={transferDate} onChange={setTransferDate} disabled={isSubmitting} />
         </div>
+
+        {locationsError && (
+          <div className="alert alert-error" role="alert">{locationsError}</div>
+        )}
+
         <div>
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !to || !location}
+            disabled={isSubmitting || !selectedLocation || locationsLoading}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting transaction…' : 'Transfer Custody'}
@@ -585,14 +645,49 @@ export function AssembleForm({
   isUnauthorized, isInvalidState, onSubmit, onReset,
 }: AssembleFormProps) {
   const { fabricIdentity } = useAuth();
-  const [assemblyID,  setAssemblyID]  = useState('');
-  const [location,    setLocation]    = useState('');
+  const [locationId, setLocationId] = useState('');
+  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
 
   const isSubmitting = state === 'submitting';
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getLocations()
+      .then(items => {
+        if (cancelled) return;
+        setLocations(items);
+        setLocationId('');
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLocationsError(
+            err instanceof Error ? err.message : 'Unable to load configured locations.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [componentID]);
+
+  const assemblyID = buildAssemblyIdPreview(componentID);
+  const selectedLocation = locations.find(item => item.id === locationId);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ assemblyID, location });
+
+    if (!assemblyID || !selectedLocation) {
+      return;
+    }
+
+    onSubmit({ locationId });
   };
 
   return (
@@ -604,15 +699,47 @@ export function AssembleForm({
       <form className="action-form" onSubmit={handleSubmit} aria-label="Assemble component form">
         <div className="action-form-grid">
           <FormField id="assy-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
-          <FormField id="assy-assembler"    label="Assembler"    value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
-          <FormField id="assy-id"           label="Assembly ID"  value={assemblyID}  onChange={setAssemblyID}  placeholder="ASSY-001" disabled={isSubmitting} />
-          <FormField id="assy-location"     label="Location"     value={location}    onChange={setLocation}    placeholder="Mysuru" disabled={isSubmitting} />
+          <FormField id="assy-assembler" label="Assembler" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
+          <FormField
+            id="assy-id"
+            label="Assembly ID"
+            value={assemblyID}
+            onChange={() => {}}
+            placeholder="Generated from Component ID"
+            disabled
+          />
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="assy-location">Assembly Location <span className="form-required">*</span></label>
+            <select
+              id="assy-location"
+              className="form-input"
+              value={locationId}
+              onChange={e => setLocationId(e.target.value)}
+              disabled={isSubmitting || locationsLoading}
+              required
+            >
+              <option value="">
+                {locationsLoading ? 'Loading locations…' : 'Select assembly location'}
+              </option>
+              {locations.map(location => (
+                <option key={location.id} value={location.id}>
+                  {location.name} · {location.code} · {location.pincode}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {locationsError && (
+          <div className="alert alert-error" role="alert">{locationsError}</div>
+        )}
+
         <div>
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !assemblyID || !location}
+            disabled={isSubmitting || !assemblyID || !selectedLocation || locationsLoading}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting transaction…' : 'Assemble Component'}
