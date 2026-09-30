@@ -116,6 +116,14 @@ class BMSContract extends Contract {
             );
         }
 
+        const expectedCertificateID = `CERT-${componentID}`;
+
+        if (certificateID !== expectedCertificateID) {
+            throw new Error(
+                `Certificate ID is system-generated and must be ${expectedCertificateID}.`
+            );
+        }
+
         // 2. Check caller role
         const callerRole =
             ctx.clientIdentity.getAttributeValue('role');
