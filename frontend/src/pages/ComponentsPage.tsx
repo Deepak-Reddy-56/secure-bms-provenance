@@ -1210,7 +1210,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </div>
                             <div className="alert-message">
                               {componentStatus === 'ASSEMBLED'
-                                ? 'Component is already assembled at ' + assemblyPlace + '.'
+                                ? 'Component already assembled at ' + assemblyPlace + '.'
                                 : componentStatus === 'TRANSFERRED'
                                   ? 'Custody has already been transferred to ' + (search.component?.custodyTo || 'the configured assembler') + '.'
                                   : 'Custody transfer is available only after warehouse receipt. Current status: ' + componentStatus + '.'}
