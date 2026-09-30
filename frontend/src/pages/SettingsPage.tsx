@@ -10,6 +10,12 @@ import {
   type AdminRole,
   type AdminUser,
 } from '../services/adminService';
+import {
+  createAdminComponentType,
+  getAdminComponentTypes,
+  updateAdminComponentTypeStatus,
+} from '../services/componentTypeService';
+import type { ComponentTypeConfig } from '../types/componentType';
 import './SettingsPage.css';
 
 const ROLE_LABELS: Record<AdminRole, string> = {
@@ -41,6 +47,15 @@ export function SettingsPage() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<AdminRole>('MANUFACTURER');
 
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeConfig[]>([]);
+  const [componentTypesLoading, setComponentTypesLoading] = useState(true);
+  const [componentTypeSaving, setComponentTypeSaving] = useState(false);
+  const [componentTypeActionId, setComponentTypeActionId] = useState<string | null>(null);
+  const [componentTypeError, setComponentTypeError] = useState<string | null>(null);
+  const [componentTypeName, setComponentTypeName] = useState('');
+  const [componentTypeCode, setComponentTypeCode] = useState('');
+  const [componentNumber, setComponentNumber] = useState('');
+
   const loadUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -57,6 +72,23 @@ export function SettingsPage() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
+
+  const loadComponentTypes = useCallback(async () => {
+    setComponentTypesLoading(true);
+    setComponentTypeError(null);
+
+    try {
+      setComponentTypes(await getAdminComponentTypes());
+    } catch (err) {
+      setComponentTypeError(getErrorMessage(err));
+    } finally {
+      setComponentTypesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadComponentTypes();
+  }, [loadComponentTypes]);
 
   const assignedRoles = useMemo(
     () => new Set(users.map(user => user.role)),
@@ -162,6 +194,54 @@ export function SettingsPage() {
     }
   };
 
+  const handleCreateComponentType = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!componentTypeName.trim() || !componentTypeCode.trim() || !/^\d{2}$/.test(componentNumber.trim())) {
+      return;
+    }
+
+    setComponentTypeSaving(true);
+    setComponentTypeError(null);
+
+    try {
+      const componentType = await createAdminComponentType({
+        name: componentTypeName.trim(),
+        code: componentTypeCode.trim().toUpperCase(),
+        componentNumber: componentNumber.trim(),
+      });
+
+      setComponentTypes(current => [...current, componentType]);
+      setComponentTypeName('');
+      setComponentTypeCode('');
+      setComponentNumber('');
+    } catch (err) {
+      setComponentTypeError(getErrorMessage(err));
+    } finally {
+      setComponentTypeSaving(false);
+    }
+  };
+
+  const handleComponentTypeStatus = async (componentType: ComponentTypeConfig) => {
+    setComponentTypeActionId(componentType.id);
+    setComponentTypeError(null);
+
+    try {
+      const updated = await updateAdminComponentTypeStatus(
+        componentType.id,
+        !componentType.active
+      );
+
+      setComponentTypes(current =>
+        current.map(item => item.id === updated.id ? updated : item)
+      );
+    } catch (err) {
+      setComponentTypeError(getErrorMessage(err));
+    } finally {
+      setComponentTypeActionId(null);
+    }
+  };
+
   const activeCount = users.filter(user => user.active).length;
   const inactiveCount = users.length - activeCount;
 
@@ -256,6 +336,158 @@ export function SettingsPage() {
           {error && (
             <div className="admin-error" role="alert">
               {error}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="admin-section" aria-labelledby="component-types-title">
+        <div className="admin-section-header">
+          <div>
+            <h2 className="admin-section-title" id="component-types-title">Component Type Registry</h2>
+            <p className="component-type-subtitle">
+              Administrator-controlled codes used to generate every new Component ID.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => void loadComponentTypes()}
+            disabled={componentTypesLoading}
+          >
+            {componentTypesLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+
+        <div className="admin-section-body">
+          <div className="component-type-rule">
+            <div className="component-type-rule-label">Component ID format</div>
+            <div className="component-type-rule-value">BMS-{'{TYPE4}'}-{'{NUMBER2}'}{'{DDMMYY}'}{'{SERIAL3}'}</div>
+            <div className="component-type-rule-help">
+              Example: <span className="mono">BMS-MOTH-01300926001</span>. The administrator owns the 4-letter type code and 2-digit component number. The serial is assigned automatically from 001.
+            </div>
+          </div>
+
+          <form className="component-type-form" onSubmit={handleCreateComponentType}>
+            <div className="admin-field">
+              <label htmlFor="component-type-name">Component Name</label>
+              <input
+                id="component-type-name"
+                type="text"
+                value={componentTypeName}
+                onChange={event => setComponentTypeName(event.target.value)}
+                placeholder="Motherboard"
+                disabled={componentTypeSaving}
+                required
+              />
+            </div>
+
+            <div className="admin-field">
+              <label htmlFor="component-type-code">4-Letter Type Code</label>
+              <input
+                id="component-type-code"
+                type="text"
+                value={componentTypeCode}
+                onChange={event => setComponentTypeCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
+                placeholder="MOTH"
+                maxLength={4}
+                pattern="[A-Z]{4}"
+                disabled={componentTypeSaving}
+                required
+              />
+            </div>
+
+            <div className="admin-field">
+              <label htmlFor="component-type-number">Component Number</label>
+              <input
+                id="component-type-number"
+                type="text"
+                inputMode="numeric"
+                value={componentNumber}
+                onChange={event => setComponentNumber(event.target.value.replace(/\D/g, '').slice(0, 2))}
+                placeholder="01"
+                maxLength={2}
+                pattern="[0-9]{2}"
+                disabled={componentTypeSaving}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={
+                componentTypeSaving ||
+                !componentTypeName.trim() ||
+                !/^[A-Z]{4}$/.test(componentTypeCode) ||
+                !/^\d{2}$/.test(componentNumber) ||
+                componentNumber === '00'
+              }
+            >
+              {componentTypeSaving ? 'Adding…' : 'Add Component Type'}
+            </button>
+          </form>
+
+          {componentTypeError && (
+            <div className="admin-error" role="alert">
+              {componentTypeError}
+            </div>
+          )}
+
+          {componentTypesLoading ? (
+            <div className="admin-loading">Loading component type registry…</div>
+          ) : componentTypes.length === 0 ? (
+            <div className="admin-empty">
+              No component types configured. Add Motherboard, Battery, Sensors or other approved component categories here before registration.
+            </div>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table component-type-table">
+                <thead>
+                  <tr>
+                    <th>Component Type</th>
+                    <th>Type Code</th>
+                    <th>Component Number</th>
+                    <th>Status</th>
+                    <th>New Registration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {componentTypes.map(componentType => {
+                    const busy = componentTypeActionId === componentType.id;
+
+                    return (
+                      <tr key={componentType.id}>
+                        <td>
+                          <div className="admin-user-name">{componentType.name}</div>
+                        </td>
+                        <td>
+                          <span className="admin-identity">{componentType.code}</span>
+                        </td>
+                        <td>
+                          <span className="admin-identity">{componentType.componentNumber}</span>
+                        </td>
+                        <td>
+                          <span className={`admin-status ${componentType.active ? 'active' : 'inactive'}`}>
+                            <span className="admin-status-dot" aria-hidden="true" />
+                            {componentType.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => void handleComponentTypeStatus(componentType)}
+                            disabled={busy}
+                          >
+                            {busy ? 'Updating…' : componentType.active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
