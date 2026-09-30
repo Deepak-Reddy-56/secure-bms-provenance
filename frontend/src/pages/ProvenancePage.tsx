@@ -130,7 +130,9 @@ export function ProvenancePage() {
           <div className="panel-header">
             <span className="panel-title">Provenance — {loadedID}</span>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-              {history.events.length > 0 ? `${history.events.length} events` : ''}
+              {history.events.length > 0
+                ? `${history.events.length} event${history.events.length === 1 ? '' : 's'}`
+                : ''}
             </span>
           </div>
         )}
