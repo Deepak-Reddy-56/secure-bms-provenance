@@ -2,6 +2,50 @@
 
 const { Contract } = require('fabric-contract-api');
 
+/**
+ * New component IDs must follow:
+ * BMS-{4-letter type code}-{2-digit component number}{DDMMYY}{3-digit serial}
+ *
+ * Example: BMS-MOTH-01300926001
+ *
+ * Legacy component IDs already on the ledger are intentionally not migrated
+ * by this validation rule; the application verification layer can report them
+ * as legacy while preserving their historical records.
+ */
+const COMPONENT_ID_PATTERN = /^BMS-[A-Z]{4}-\d{11}$/;
+
+function isValidComponentDate(componentID) {
+    const match = componentID.match(/^BMS-[A-Z]{4}-\d{2}(\d{2})(\d{2})(\d{2})\d{3}$/);
+
+    if (!match) {
+        return false;
+    }
+
+    const [, dayPart, monthPart, yearPart] = match;
+    const day = Number(dayPart);
+    const month = Number(monthPart);
+    const year = 2000 + Number(yearPart);
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return (
+        day >= 1 &&
+        month >= 1 &&
+        month <= 12 &&
+        date.getUTCFullYear() === year &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day
+    );
+}
+
+function validateNewComponentID(componentID) {
+    if (!COMPONENT_ID_PATTERN.test(componentID) || !isValidComponentDate(componentID)) {
+        throw new Error(
+            'Component ID must follow BMS-{TYPE4}-{NUMBER2}{DDMMYY}{SERIAL3}; example: BMS-MOTH-01300926001.'
+        );
+    }
+}
+
 class BMSContract extends Contract {
 
     async CreateComponent(
@@ -24,6 +68,8 @@ class BMSContract extends Contract {
                 'All component fields are required.'
             );
         }
+
+        validateNewComponentID(componentID);
 
         const existingComponent = await ctx.stub.getState(componentID);
 
