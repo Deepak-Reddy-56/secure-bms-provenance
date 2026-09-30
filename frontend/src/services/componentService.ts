@@ -8,6 +8,7 @@ import type {
   TransferCustodyPayload,
   AssembleComponentPayload,
   LifecycleActionResult,
+  ComponentVerificationResult,
 } from '../types/component';
 import type { ProvenanceEvent } from '../types/provenance';
 
@@ -34,6 +35,21 @@ export async function getComponent(
 ): Promise<Component> {
   const encoded = encodeURIComponent(componentID.trim());
   return api.get<Component>(`/api/components/${encoded}`, signal);
+}
+
+/**
+ * Verify a component against the Fabric ledger and the configured ID format.
+ * Calls GET /api/components/:componentID/verify
+ */
+export async function verifyComponent(
+  componentID: string,
+  signal?: AbortSignal
+): Promise<ComponentVerificationResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<ComponentVerificationResult>(
+    `/api/components/${encoded}/verify`,
+    signal
+  );
 }
 
 // ── Day 2 lifecycle operations ────────────────────────────────
