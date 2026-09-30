@@ -247,7 +247,7 @@ export function CertifyForm({
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSubmitting || !certificateID || !complianceReference}
+            disabled={isSubmitting || !componentID || !certificationDate || !complianceReference.trim()}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting transaction…' : 'Certify Component'}
