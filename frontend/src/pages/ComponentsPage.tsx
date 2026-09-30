@@ -7,7 +7,9 @@ import { useLifecycleAction } from '../hooks/useLifecycleAction';
 import type { ComponentStatus } from '../types/component';
 import type { RegisterComponentPayload } from '../types/component';
 import type { ComponentTypeConfig } from '../types/componentType';
+import type { LocationConfig } from '../types/location';
 import { getComponentTypes } from '../services/componentTypeService';
+import { getLocations } from '../services/locationService';
 import {
   certifyComponent, shipComponent, receiveComponent,
   transferCustody, assembleComponent,
@@ -113,6 +115,26 @@ function Field({ id, label, type = 'text', value, onChange, placeholder, disable
 }
 
 // ── Action forms ───────────────────────────────────────────────
+function buildShipmentIdPreview(
+  componentID: string,
+  shipmentDate: string,
+  fromCode: string,
+  toCode: string
+): string {
+  const match = componentID.trim().toUpperCase().match(/^BMS-([A-Z]{4})-(\\d{2})/);
+  if (!match || !shipmentDate || !fromCode || !toCode) {
+    return '';
+  }
+
+  const [, typeCode, componentNumber] = match;
+  const [year, month, day] = shipmentDate.split('-');
+  if (!year || !month || !day) {
+    return '';
+  }
+
+  return `SHIP-${typeCode}-${componentNumber}${day}${month}${year.slice(-2)}-${fromCode}-${toCode}`;
+}
+
 
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
@@ -150,6 +172,9 @@ export function ComponentsPage() {
   const [componentTypes, setComponentTypes] = useState<ComponentTypeConfig[]>([]);
   const [componentTypesLoading, setComponentTypesLoading] = useState(false);
   const [componentTypesError, setComponentTypesError] = useState<string | null>(null);
+  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!permissions.canRegister) {
@@ -191,11 +216,55 @@ export function ComponentsPage() {
     };
   }, [permissions.canRegister]);
 
+  useEffect(() => {
+    if (!permissions.canShip) {
+      return;
+    }
+
+    let cancelled = false;
+
+    setLocationsLoading(true);
+    setLocationsError(null);
+
+    void getLocations()
+      .then(items => {
+        if (cancelled) return;
+        setLocations(items);
+
+        const currentComponentLocation = search.component?.location?.trim().toLowerCase();
+        const matchingOrigin = items.find(
+          item => item.name.trim().toLowerCase() === currentComponentLocation
+        );
+
+        setShip(current => ({
+          ...current,
+          fromLocationId: current.fromLocationId || matchingOrigin?.id || '',
+          toLocationId: current.toLocationId || '',
+        }));
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLocationsError(
+            err instanceof Error
+              ? err.message
+              : 'Unable to load configured locations.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [permissions.canShip, search.component?.location]);
+
   // Certify form state
   const [cert, setCert] = useState({ certificationDate: today, complianceReference: '' });
 
   // Ship form state
-  const [ship, setShip] = useState({ from: '', to: '', shipmentID: '', shipmentDate: today });
+  const [ship, setShip] = useState({ fromLocationId: '', toLocationId: '', shipmentDate: today });
 
   // Receive form state
   const [recv, setRecv] = useState({ location: '', receivedDate: today });
@@ -769,10 +838,32 @@ export function ComponentsPage() {
                     <form onSubmit={e => {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
+
+                      const fromLocation = locations.find(item => item.id === ship.fromLocationId);
+                      const toLocation = locations.find(item => item.id === ship.toLocationId);
+
+                      if (!fromLocation || !toLocation) {
+                        addToast('Select valid origin and destination locations.', 'warning');
+                        return;
+                      }
+
+                      const shipmentID = buildShipmentIdPreview(
+                        activeID,
+                        ship.shipmentDate,
+                        fromLocation.code,
+                        toLocation.code
+                      );
+
                       openConfirm({
                         title: 'Ship Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
-                        fields: [{ label: 'From', value: ship.from }, { label: 'To', value: ship.to }, { label: 'Shipment ID', value: ship.shipmentID }],
+                        fields: [
+                          { label: 'Component', value: search.component?.componentType || activeID },
+                          { label: 'Shipment ID', value: shipmentID },
+                          { label: 'From', value: fromLocation.name + ' (' + fromLocation.code + ')' },
+                          { label: 'To', value: toLocation.name + ' (' + toLocation.code + ')' },
+                          { label: 'Shipment Date', value: ship.shipmentDate },
+                        ],
                       }, () => action.execute(sig => shipComponent(activeID, ship, sig))
                         .then(success => {if(success){handleSuccess(`Component ${activeID} shipped`);
                         }
@@ -785,13 +876,100 @@ export function ComponentsPage() {
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
                         <Field id="ship-trnsp" label="Transporter" value={fabricIdentity} onChange={() => {}} readOnly />
-                        <Field id="ship-from" label="From Location" value={ship.from} onChange={v => setShip(p => ({ ...p, from: v }))} placeholder="Bengaluru" />
-                        <Field id="ship-to" label="To Location" value={ship.to} onChange={v => setShip(p => ({ ...p, to: v }))} placeholder="Mysuru" />
-                        <Field id="ship-sid" label="Shipment ID" value={ship.shipmentID} onChange={v => setShip(p => ({ ...p, shipmentID: v }))} placeholder="SHIP-001" />
+                        <div className="form-group">
+                          <label className="form-label" htmlFor="ship-from">From Location <span className="form-required">*</span></label>
+                          <select
+                            id="ship-from"
+                            className="form-input"
+                            value={ship.fromLocationId}
+                            onChange={e => setShip(p => ({ ...p, fromLocationId: e.target.value }))}
+                            disabled={locationsLoading}
+                            required
+                          >
+                            <option value="">
+                              {locationsLoading ? 'Loading locations…' : 'Select origin'}
+                            </option>
+                            {locations.map(location => (
+                              <option key={location.id} value={location.id}>
+                                {location.name} · {location.code} · {location.pincode}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label" htmlFor="ship-to">To Location <span className="form-required">*</span></label>
+                          <select
+                            id="ship-to"
+                            className="form-input"
+                            value={ship.toLocationId}
+                            onChange={e => setShip(p => ({ ...p, toLocationId: e.target.value }))}
+                            disabled={locationsLoading}
+                            required
+                          >
+                            <option value="">
+                              {locationsLoading ? 'Loading locations…' : 'Select destination'}
+                            </option>
+                            {locations.map(location => (
+                              <option key={location.id} value={location.id}>
+                                {location.name} · {location.code} · {location.pincode}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group full-width">
+                          <label className="form-label" htmlFor="ship-sid">Shipment ID</label>
+                          <input
+                            id="ship-sid"
+                            type="text"
+                            className="form-input mono"
+                            value={
+                              (() => {
+                                const fromLocation = locations.find(item => item.id === ship.fromLocationId);
+                                const toLocation = locations.find(item => item.id === ship.toLocationId);
+                                return buildShipmentIdPreview(
+                                  activeID,
+                                  ship.shipmentDate,
+                                  fromLocation?.code || '',
+                                  toLocation?.code || ''
+                                );
+                              })()
+                            }
+                            placeholder="Generated from component, route and shipment date"
+                            readOnly
+                          />
+                          <div style={{
+                            marginTop: 'var(--space-2)',
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--text-secondary)',
+                          }}>
+                            Generated automatically. Format: SHIP-&#123;TYPE4&#125;-&#123;NUMBER2&#125;&#123;DDMMYY&#125;-&#123;FROM&#125;-&#123;TO&#125;.
+                          </div>
+                        </div>
                         <Field id="ship-date" label="Shipment Date" type="date" value={ship.shipmentDate} onChange={v => setShip(p => ({ ...p, shipmentDate: v }))} />
                       </div>
+                      {locationsError && (
+                        <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">✕</span>
+                          <div className="alert-body">
+                            <div className="alert-title">Locations Unavailable</div>
+                            <div className="alert-message">{locationsError}</div>
+                          </div>
+                        </div>
+                      )}
                       <div style={{ marginTop: 'var(--space-5)' }}>
-                        <button type="submit" className="btn btn-primary" id="btn-ship" disabled={!ship.from || !ship.to || !ship.shipmentID}>
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          id="btn-ship"
+                          disabled={
+                            !ship.fromLocationId ||
+                            !ship.toLocationId ||
+                            ship.fromLocationId === ship.toLocationId ||
+                            !ship.shipmentDate ||
+                            locationsLoading ||
+                            locations.length < 2
+                          }
+                        >
                           Ship Component
                         </button>
                       </div>
