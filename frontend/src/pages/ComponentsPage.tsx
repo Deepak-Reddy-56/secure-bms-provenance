@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_PERMISSIONS } from '../types/identity';
 import { useToast } from '../context/ToastContext';
@@ -6,6 +6,8 @@ import { useComponentSearch, useRegistration } from '../hooks/useComponent';
 import { useLifecycleAction } from '../hooks/useLifecycleAction';
 import type { ComponentStatus } from '../types/component';
 import type { RegisterComponentPayload } from '../types/component';
+import type { ComponentTypeConfig } from '../types/componentType';
+import { getComponentTypes } from '../services/componentTypeService';
 import {
   certifyComponent, shipComponent, receiveComponent,
   transferCustody, assembleComponent,
@@ -142,8 +144,52 @@ export function ComponentsPage() {
 
   // Register form state
   const [reg, setReg] = useState<RegisterComponentPayload>({
-    componentID: '', componentType: '', manufacturer: '', manufactureDate: today, location: '',
+    componentTypeId: '', manufacturer: '', manufactureDate: today, location: '',
   });
+
+  const [componentTypes, setComponentTypes] = useState<ComponentTypeConfig[]>([]);
+  const [componentTypesLoading, setComponentTypesLoading] = useState(false);
+  const [componentTypesError, setComponentTypesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!permissions.canRegister) {
+      return;
+    }
+
+    let cancelled = false;
+
+    setComponentTypesLoading(true);
+    setComponentTypesError(null);
+
+    void getComponentTypes()
+      .then(types => {
+        if (!cancelled) {
+          setComponentTypes(types);
+          setReg(current => ({
+            ...current,
+            componentTypeId: current.componentTypeId || types[0]?.id || '',
+          }));
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setComponentTypesError(
+            err instanceof Error
+              ? err.message
+              : 'Unable to load configured component types.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setComponentTypesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [permissions.canRegister]);
 
   // Certify form state
   const [cert, setCert] = useState({ certificateID: '', certificationDate: today, complianceReference: '' });
@@ -236,8 +282,24 @@ export function ComponentsPage() {
         </div>
 
         {/* Search result */}
-        {search.state === 'found' && search.component && (
-          <div className="verify-result" role="region" aria-label="Component details">
+        {search.state === 'found' && search.component && search.verification && (
+          <div className="verify-result" role="region" aria-label="Component verification result">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                marginBottom: 'var(--space-4)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--success)',
+              }}
+            >
+              <span aria-hidden="true">✓</span>
+              {search.verification.verificationStatus}
+            </div>
             <div className="verify-result-header">
               <div>
                 <div className="verify-result-id">{search.component.componentID}</div>
@@ -251,6 +313,27 @@ export function ComponentsPage() {
                 { label: 'Manufacturing Date', value: search.component.manufactureDate },
                 { label: 'Location', value: search.component.location },
                 { label: 'Current Status', value: search.component.status },
+                {
+                  label: 'ID Format',
+                  value: search.verification.idFormat.valid ? 'Valid' : 'Legacy / Non-standard',
+                },
+                {
+                  label: 'Type Configuration',
+                  value:
+                    search.verification.typeConfigurationStatus === 'REGISTERED'
+                      ? 'Registered'
+                      : search.verification.typeConfigurationStatus === 'TYPE_NUMBER_MISMATCH'
+                        ? 'Code / number mismatch'
+                        : search.verification.idFormat.valid
+                          ? 'Not registered'
+                          : 'Not applicable to legacy ID',
+                },
+                {
+                  label: 'Provenance',
+                  value: search.verification.provenanceAvailable
+                    ? `${search.verification.provenanceEventCount} ledger record${search.verification.provenanceEventCount === 1 ? '' : 's'} available`
+                    : 'No history returned',
+                },
               ].map(cell => (
                 <div key={cell.label} className="verify-result-cell">
                   <div className="verify-result-cell-label">{cell.label}</div>
@@ -405,49 +488,171 @@ export function ComponentsPage() {
                         <div className="tx-success" role="status">
                           <div className="tx-success-header"><span>✓</span> Component Registered</div>
                           <div className="tx-grid">
-                            <div><div className="tx-field-label">Component ID</div>
-                              <div className="tx-field-value mono">{registration.registeredComponent.componentID}</div></div>
-                            <div><div className="tx-field-label">Status</div>
-                              <StatusBadge status="MANUFACTURED" /></div>
-                            <div><div className="tx-field-label">Manufacturer</div>
-                              <div className="tx-field-value">{registration.registeredComponent.manufacturer}</div></div>
-                            <div><div className="tx-field-label">Type</div>
-                              <div className="tx-field-value">{registration.registeredComponent.componentType}</div></div>
+                            <div>
+                              <div className="tx-field-label">Component ID</div>
+                              <div className="tx-field-value mono">{registration.registeredComponent.componentID}</div>
+                            </div>
+                            <div>
+                              <div className="tx-field-label">Status</div>
+                              <StatusBadge status="MANUFACTURED" />
+                            </div>
+                            <div>
+                              <div className="tx-field-label">Manufacturer</div>
+                              <div className="tx-field-value">{registration.registeredComponent.manufacturer}</div>
+                            </div>
+                            <div>
+                              <div className="tx-field-label">Type</div>
+                              <div className="tx-field-value">{registration.registeredComponent.componentType}</div>
+                            </div>
                           </div>
-                          <button className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-4)' }}
-                            onClick={() => { registration.reset(); setReg({ componentID: '', componentType: '', manufacturer: '', manufactureDate: today, location: '' }); }}>
+                          <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                            The Component ID was generated by the server from the administrator-configured type code, component number, manufacture date and next available serial.
+                          </p>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ marginTop: 'var(--space-4)' }}
+                            onClick={() => {
+                              registration.reset();
+                              setReg({
+                                componentTypeId: componentTypes[0]?.id || '',
+                                manufacturer: '',
+                                manufactureDate: today,
+                                location: '',
+                              });
+                            }}
+                          >
                             Register Another
                           </button>
                         </div>
                       ) : (
                         <form onSubmit={e => {
                           e.preventDefault();
-                          if (!reg.componentID || !reg.componentType || !reg.manufacturer || !reg.location) return;
+
+                          if (
+                            !reg.componentTypeId ||
+                            !reg.manufacturer.trim() ||
+                            !reg.manufactureDate ||
+                            !reg.location.trim()
+                          ) {
+                            return;
+                          }
+
                           registration.register({
-                            componentID: reg.componentID.trim(), componentType: reg.componentType.trim(),
-                            manufacturer: reg.manufacturer.trim(), manufactureDate: reg.manufactureDate, location: reg.location.trim(),
+                            componentTypeId: reg.componentTypeId,
+                            manufacturer: reg.manufacturer.trim(),
+                            manufactureDate: reg.manufactureDate,
+                            location: reg.location.trim(),
                           });
                         }}>
                           <div className="form-grid">
                             <div className="form-group full-width">
-                              <label className="form-label" htmlFor="reg-id">Component ID <span className="form-required">*</span></label>
-                              <input id="reg-id" type="text" className="form-input mono" value={reg.componentID}
-                                onChange={e => setReg(p => ({ ...p, componentID: e.target.value }))}
-                                placeholder="e.g. BMS-2026-001" disabled={registration.state === 'submitting'} />
+                              <label className="form-label" htmlFor="reg-type">
+                                Component Type <span className="form-required">*</span>
+                              </label>
+                              <select
+                                id="reg-type"
+                                className="form-input"
+                                value={reg.componentTypeId}
+                                onChange={e => setReg(p => ({ ...p, componentTypeId: e.target.value }))}
+                                disabled={registration.state === 'submitting' || componentTypesLoading}
+                                required
+                              >
+                                <option value="">
+                                  {componentTypesLoading ? 'Loading component types…' : 'Select component type'}
+                                </option>
+                                {componentTypes.map(type => (
+                                  <option key={type.id} value={type.id}>
+                                    {type.name} · {type.code} · {type.componentNumber}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
-                            <Field id="reg-type" label="Component Type" value={reg.componentType}
-                              onChange={v => setReg(p => ({ ...p, componentType: v }))} placeholder="e.g. BMS Controller"
-                              disabled={registration.state === 'submitting'} />
-                            <Field id="reg-mfr" label="Manufacturer" value={reg.manufacturer}
-                              onChange={v => setReg(p => ({ ...p, manufacturer: v }))} placeholder="e.g. EVTech Manufacturing"
-                              disabled={registration.state === 'submitting'} />
-                            <Field id="reg-date" label="Manufacturing Date" type="date" value={reg.manufactureDate}
+
+                            {reg.componentTypeId && (
+                              <div className="form-group full-width">
+                                <div
+                                  style={{
+                                    padding: 'var(--space-4)',
+                                    border: '1px solid var(--border-subtle)',
+                                    background: 'var(--bg-ui)',
+                                  }}
+                                >
+                                  <div style={{
+                                    fontSize: 'var(--text-xs)',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.08em',
+                                    textTransform: 'uppercase',
+                                    color: 'var(--text-secondary)',
+                                    marginBottom: 'var(--space-2)',
+                                  }}>
+                                    Component ID Rule
+                                  </div>
+                                  <div style={{
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: 'var(--text-sm)',
+                                    color: 'var(--text-primary)',
+                                  }}>
+                                    BMS-{componentTypes.find(type => type.id === reg.componentTypeId)?.code ?? 'TYPE'}-{componentTypes.find(type => type.id === reg.componentTypeId)?.componentNumber ?? '00'}[DDMMYY][SERIAL]
+                                  </div>
+                                  <div style={{
+                                    marginTop: 'var(--space-2)',
+                                    fontSize: 'var(--text-xs)',
+                                    color: 'var(--text-secondary)',
+                                  }}>
+                                    The serial is assigned automatically starting at 001. The ID is generated after registration and cannot be entered manually.
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <Field
+                              id="reg-mfr"
+                              label="Manufacturer"
+                              value={reg.manufacturer}
+                              onChange={v => setReg(p => ({ ...p, manufacturer: v }))}
+                              placeholder="e.g. EVTech Manufacturing"
+                              disabled={registration.state === 'submitting'}
+                            />
+                            <Field
+                              id="reg-date"
+                              label="Manufacturing Date"
+                              type="date"
+                              value={reg.manufactureDate}
                               onChange={v => setReg(p => ({ ...p, manufactureDate: v }))}
-                              disabled={registration.state === 'submitting'} />
-                            <Field id="reg-loc" label="Location" value={reg.location}
-                              onChange={v => setReg(p => ({ ...p, location: v }))} placeholder="e.g. Bengaluru"
-                              disabled={registration.state === 'submitting'} />
+                              disabled={registration.state === 'submitting'}
+                            />
+                            <Field
+                              id="reg-loc"
+                              label="Location"
+                              value={reg.location}
+                              onChange={v => setReg(p => ({ ...p, location: v }))}
+                              placeholder="e.g. Bengaluru"
+                              disabled={registration.state === 'submitting'}
+                            />
                           </div>
+
+                          {componentTypesError && (
+                            <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
+                              <span className="alert-icon">✕</span>
+                              <div className="alert-body">
+                                <div className="alert-title">Component Types Unavailable</div>
+                                <div className="alert-message">{componentTypesError}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {componentTypes.length === 0 && !componentTypesLoading && !componentTypesError && (
+                            <div className="alert alert-warning" role="status" style={{ marginTop: 'var(--space-4)' }}>
+                              <span className="alert-icon">!</span>
+                              <div className="alert-body">
+                                <div className="alert-title">No Component Types Configured</div>
+                                <div className="alert-message">
+                                  An administrator must add and activate at least one component type before components can be registered.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {registration.state === 'error' && registration.errorMessage && (
                             <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
                               <span className="alert-icon">{registration.isDuplicate ? '⚠' : '✕'}</span>
@@ -457,11 +662,24 @@ export function ComponentsPage() {
                               </div>
                             </div>
                           )}
+
                           <div style={{ marginTop: 'var(--space-5)' }}>
-                            <button type="submit" className="btn btn-primary" id="btn-register"
-                              disabled={registration.state === 'submitting' || !reg.componentID || !reg.componentType || !reg.manufacturer || !reg.location}>
-                              {registration.state === 'submitting' ?
-                                <><span className="spinner spinner-sm spinner-white" /> Registering…</> : 'Register Component'}
+                            <button
+                              type="submit"
+                              className="btn btn-primary"
+                              id="btn-register"
+                              disabled={
+                                registration.state === 'submitting' ||
+                                componentTypes.length === 0 ||
+                                !reg.componentTypeId ||
+                                !reg.manufacturer.trim() ||
+                                !reg.manufactureDate ||
+                                !reg.location.trim()
+                              }
+                            >
+                              {registration.state === 'submitting'
+                                ? <><span className="spinner spinner-sm spinner-white" /> Registering…</>
+                                : 'Register Component'}
                             </button>
                           </div>
                         </form>
