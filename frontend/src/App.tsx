@@ -30,9 +30,16 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
   AUDITOR: [...OPERATIONAL_PAGES, 'audit'],
 };
 
+const ADMIN_PAGES: Page[] = [
+  'admin-users',
+  'admin-component-types',
+  'admin-locations',
+  'network',
+];
+
 function canAccessPage(page: Page, role: UserRole | null, isAdmin: boolean): boolean {
   if (isAdmin) {
-    return page === 'settings' || page === 'network';
+    return ADMIN_PAGES.includes(page);
   }
 
   return Boolean(role && ROLE_PAGES[role].includes(page));
@@ -45,12 +52,14 @@ const PAGE_TITLES: Record<Page, string> = {
   provenance: 'Provenance History',
   audit: 'Audit Log',
   network: 'Network Status',
-  settings: 'Administration',
+  'admin-users': 'User Management',
+  'admin-component-types': 'Component Types',
+  'admin-locations': 'Locations',
 };
 
 function AppInner() {
   const { role, isAdmin } = useAuth();
-  const defaultPage: Page = isAdmin ? 'settings' : 'overview';
+  const defaultPage: Page = isAdmin ? 'admin-users' : 'overview';
   const [currentPage, setCurrentPage] = useState<Page>(defaultPage);
 
   const { status, health, refresh } = useNetworkStatus(isAdmin);
@@ -102,8 +111,14 @@ function AppInner() {
           />
         );
 
-      case 'settings':
-        return <SettingsPage />;
+      case 'admin-users':
+        return <SettingsPage section="users" />;
+
+      case 'admin-component-types':
+        return <SettingsPage section="componentTypes" />;
+
+      case 'admin-locations':
+        return <SettingsPage section="locations" />;
 
       default:
         return null;
