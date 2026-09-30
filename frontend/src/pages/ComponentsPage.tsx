@@ -630,7 +630,8 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                 <div className="tx-error" style={{ marginBottom: 'var(--space-5)' }} role="alert">
                   <div className="tx-error-header">
                     <span aria-hidden="true">✕</span>
-                    {action.errorMessage === 'Component already assembled.'
+                    {(action.errorMessage?.startsWith('Component already assembled at ') ||
+  action.errorMessage === 'Component already assembled.')
   ? 'Component Already Assembled'
   : action.isUnauthorized
     ? 'Unauthorized Action'
