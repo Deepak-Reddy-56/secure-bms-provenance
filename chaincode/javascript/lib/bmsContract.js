@@ -84,10 +84,15 @@ class BMSContract extends Contract {
             );
         }
 
+        const manufacturerActor =
+            ctx.clientIdentity.getAttributeValue('hf.EnrollmentID')
+            || 'unknown';
+
         const component = {
             componentID: componentID,
             componentType: componentType,
             manufacturer: manufacturer,
+            manufacturerActor: manufacturerActor,
             manufactureDate: manufactureDate,
             location: location,
             status: 'MANUFACTURED'
