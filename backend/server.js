@@ -245,7 +245,7 @@ function normalizeProvenanceHistory(history) {
           return {
             ...base,
             eventType: 'MANUFACTURED',
-            actor: data.manufacturer || 'Unknown',
+            actor: data.manufacturerActor || data.manufacturer || 'Unknown',
             manufacturer: data.manufacturer || 'Unknown',
             location: data.location || 'Unknown',
           };
