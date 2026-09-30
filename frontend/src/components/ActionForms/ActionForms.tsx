@@ -210,7 +210,6 @@ export function CertifyForm({
 }: CertifyFormProps) {
   const { fabricIdentity } = useAuth();
   const today = new Date().toISOString().split('T')[0];
-  const [certificateID,       setCertificateID]       = useState('');
   const [certificationDate,   setCertificationDate]   = useState(today);
   const [complianceReference, setComplianceReference] = useState('');
 
@@ -218,7 +217,7 @@ export function CertifyForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ certificateID, certificationDate, complianceReference });
+    onSubmit({ certificationDate, complianceReference });
   };
 
   return (
@@ -231,8 +230,14 @@ export function CertifyForm({
         <div className="action-form-grid">
           <FormField id="cert-component-id" label="Component ID" value={componentID} onChange={() => {}} disabled />
           <FormField id="cert-certifier" label="Certifier" value={fabricIdentity ?? 'Unavailable'} onChange={() => {}} readOnly />
-          <FormField id="cert-certificate-id" label="Certificate ID" value={certificateID}
-            onChange={setCertificateID} placeholder="CERT-BMS-001" disabled={isSubmitting} />
+          <FormField
+            id="cert-certificate-id"
+            label="Certificate ID"
+            value={componentID ? `CERT-${componentID}` : ''}
+            onChange={() => {}}
+            placeholder="Generated automatically from Component ID"
+            disabled
+          />
           <FormField id="cert-date" label="Certification Date" type="date" value={certificationDate}
             onChange={setCertificationDate} disabled={isSubmitting} />
           <FormField id="cert-compliance" label="Compliance Reference" value={complianceReference}
