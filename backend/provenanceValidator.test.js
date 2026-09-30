@@ -37,6 +37,8 @@ test('accepts a complete ordered provenance history', () => {
   const result = validateProvenance(validHistory);
   assert.equal(result.valid, true);
   assert.equal(result.status, 'PROVENANCE VALID');
+  assert.equal(result.condition, 'VALID');
+  assert.equal(result.warning, null);
   assert.equal(result.completedStages, 6);
 });
 
