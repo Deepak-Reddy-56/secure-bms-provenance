@@ -10,7 +10,7 @@ import type {
   LifecycleActionResult,
   ComponentVerificationResult,
 } from '../types/component';
-import type { ProvenanceEvent } from '../types/provenance';
+import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
 
 // ── Day 1 operations ──────────────────────────────────────────
 
@@ -145,6 +145,21 @@ export async function getComponentHistory(
   const encoded = encodeURIComponent(componentID.trim());
   return api.get<ProvenanceEvent[]>(
     `${routeBase}/${encoded}/history`,
+    signal
+  );
+}
+
+/**
+ * Validate the component provenance sequence and required history data.
+ * Calls GET /api/components/:componentID/provenance/validate
+ */
+export async function validateComponentProvenance(
+  componentID: string,
+  signal?: AbortSignal
+): Promise<ProvenanceValidationResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<ProvenanceValidationResult>(
+    `/api/components/${encoded}/provenance/validate`,
     signal
   );
 }
