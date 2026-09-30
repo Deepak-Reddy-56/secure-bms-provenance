@@ -16,8 +16,9 @@ import { getComponentTypes } from '../services/componentTypeService';
 import { getLocations } from '../services/locationService';
 import {
   certifyComponent, shipComponent, receiveComponent,
-  transferCustody, assembleComponent,
+  transferCustody, assembleComponent, getActiveAssembler,
 } from '../services/componentService';
+import type { OperationalAssembler } from '../services/componentService';
 
 // ── Status badge ───────────────────────────────────────────────
 
@@ -119,6 +120,19 @@ function Field({ id, label, type = 'text', value, onChange, placeholder, disable
 }
 
 // ── Action forms ───────────────────────────────────────────────
+function buildAssemblyIdPreview(componentID: string): string {
+  const match = componentID.trim().toUpperCase().match(
+    /^BMS-([A-Z]{4})-(\d{2})(\d{6})(\d{3})$/
+  );
+
+  if (!match) {
+    return '';
+  }
+
+  const [, typeCode, componentNumber, datePart, serial] = match;
+  return `ASSY-${typeCode}-${componentNumber}${datePart}${serial}`;
+}
+
 function buildShipmentIdPreview(
   componentID: string,
   shipmentDate: string,
@@ -179,6 +193,9 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   const [locations, setLocations] = useState<LocationConfig[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [activeAssembler, setActiveAssembler] = useState<OperationalAssembler | null>(null);
+  const [assemblerLoading, setAssemblerLoading] = useState(false);
+  const [assemblerError, setAssemblerError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!permissions.canRegister) {
@@ -221,7 +238,13 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   }, [permissions.canRegister]);
 
   useEffect(() => {
-    if (!permissions.canShip) {
+    const needsLocations =
+      permissions.canShip ||
+      permissions.canReceive ||
+      permissions.canTransfer ||
+      permissions.canAssemble;
+
+    if (!needsLocations) {
       return;
     }
 
@@ -262,7 +285,48 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [permissions.canShip, search.component?.location]);
+  }, [
+    permissions.canShip,
+    permissions.canReceive,
+    permissions.canTransfer,
+    permissions.canAssemble,
+    search.component?.location,
+  ]);
+
+  useEffect(() => {
+    if (!permissions.canTransfer) {
+      return;
+    }
+
+    let cancelled = false;
+
+    setAssemblerLoading(true);
+    setAssemblerError(null);
+
+    void getActiveAssembler()
+      .then(assembler => {
+        if (!cancelled) {
+          setActiveAssembler(assembler);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setActiveAssembler(null);
+          setAssemblerError(
+            err instanceof Error
+              ? err.message
+              : 'Unable to load the configured assembler.'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAssemblerLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [permissions.canTransfer]);
 
   // Certify form state
   const [cert, setCert] = useState({ certificationDate: today, complianceReference: '' });
@@ -274,10 +338,10 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   const [recv, setRecv] = useState({ location: '', receivedDate: today });
 
   // Transfer form state
-  const [xfr, setXfr] = useState({ to: '', location: '', transferDate: today });
+  const [xfr, setXfr] = useState({ locationId: '', transferDate: today });
 
   // Assemble form state
-  const [assy, setAssy] = useState({ assemblyID: '', location: '' });
+  const [assy, setAssy] = useState({ locationId: '' });
 
   const handleSearch = () => {
     if (searchInput.trim()) search.search(searchInput.trim());
@@ -1046,10 +1110,22 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                     <form onSubmit={e => {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
+                      const transferLocation = locations.find(item => item.id === xfr.locationId);
+
+                      if (!activeAssembler || !transferLocation) {
+                        addToast('Select the configured assembler and a valid transfer location.', 'warning');
+                        return;
+                      }
+
                       openConfirm({
                         title: 'Transfer Custody', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
-                        fields: [{ label: 'From', value: fabricIdentity }, { label: 'To', value: xfr.to }, { label: 'Location', value: xfr.location }],
+                        fields: [
+                          { label: 'From', value: fabricIdentity },
+                          { label: 'To Assembler', value: activeAssembler.name + ' (' + activeAssembler.fabricIdentity + ')' },
+                          { label: 'Location', value: transferLocation.name + ' (' + transferLocation.code + ')' },
+                          { label: 'Transfer Date', value: xfr.transferDate },
+                        ],
                       }, () => action.execute(sig => transferCustody(activeID, xfr, sig))
                         .then(success => {if(success){handleSuccess(`Custody transferred for ${activeID}`);
                       }
@@ -1061,12 +1137,86 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
                         <Field id="xfr-from" label="From" value={fabricIdentity} onChange={() => {}} readOnly />
-                        <Field id="xfr-to" label="To" value={xfr.to} onChange={v => setXfr(p => ({ ...p, to: v }))} placeholder="assembler1" />
-                        <Field id="xfr-loc" label="Location" value={xfr.location} onChange={v => setXfr(p => ({ ...p, location: v }))} placeholder="Mysuru" />
-                        <Field id="xfr-date" label="Transfer Date" type="date" value={xfr.transferDate} onChange={v => setXfr(p => ({ ...p, transferDate: v }))} />
+                        <Field
+                          id="xfr-to"
+                          label="To Assembler"
+                          value={
+                            assemblerLoading
+                              ? 'Loading assembler…'
+                              : activeAssembler
+                                ? activeAssembler.name + ' (' + activeAssembler.fabricIdentity + ')'
+                                : ''
+                          }
+                          onChange={() => {}}
+                          placeholder="No active assembler configured"
+                          readOnly
+                        />
+                        <div className="form-group">
+                          <label className="form-label" htmlFor="xfr-loc">
+                            Transfer Location <span className="form-required">*</span>
+                          </label>
+                          <select
+                            id="xfr-loc"
+                            className="form-input"
+                            value={xfr.locationId}
+                            onChange={e => setXfr(p => ({ ...p, locationId: e.target.value }))}
+                            disabled={locationsLoading || !activeAssembler}
+                            required
+                          >
+                            <option value="">
+                              {locationsLoading ? 'Loading locations…' : 'Select transfer location'}
+                            </option>
+                            {locations.map(location => (
+                              <option key={location.id} value={location.id}>
+                                {location.name} · {location.code} · {location.pincode}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <Field
+                          id="xfr-date"
+                          label="Transfer Date"
+                          type="date"
+                          value={xfr.transferDate}
+                          onChange={v => setXfr(p => ({ ...p, transferDate: v }))}
+                        />
                       </div>
+                      {(assemblerError || (!assemblerLoading && !activeAssembler)) && (
+                        <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">✕</span>
+                          <div className="alert-body">
+                            <div className="alert-title">Assembler Unavailable</div>
+                            <div className="alert-message">
+                              {assemblerError || 'No active assembler is configured. Ask the administrator to configure the assembler.'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {locationsError && (
+                        <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">✕</span>
+                          <div className="alert-body">
+                            <div className="alert-title">Locations Unavailable</div>
+                            <div className="alert-message">{locationsError}</div>
+                          </div>
+                        </div>
+                      )}
                       <div style={{ marginTop: 'var(--space-5)' }}>
-                        <button type="submit" className="btn btn-primary" id="btn-transfer" disabled={!xfr.to || !xfr.location}>Transfer Custody</button>
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          id="btn-transfer"
+                          disabled={
+                            !activeID ||
+                            !activeAssembler ||
+                            !xfr.locationId ||
+                            !xfr.transferDate ||
+                            assemblerLoading ||
+                            locationsLoading
+                          }
+                        >
+                          Transfer Custody
+                        </button>
                       </div>
                     </form>
                   )}
@@ -1076,10 +1226,22 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                     <form onSubmit={e => {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
+                      const assemblyID = buildAssemblyIdPreview(activeID);
+                      const assemblyLocation = locations.find(item => item.id === assy.locationId);
+
+                      if (!assemblyID || !assemblyLocation) {
+                        addToast('Select a valid assembly location.', 'warning');
+                        return;
+                      }
+
                       openConfirm({
                         title: 'Assemble Component', componentID: activeID, actor: fabricIdentity,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
-                        fields: [{ label: 'Assembler', value: fabricIdentity }, { label: 'Assembly ID', value: assy.assemblyID }, { label: 'Location', value: assy.location }],
+                        fields: [
+                          { label: 'Assembler', value: fabricIdentity },
+                          { label: 'Assembly ID', value: assemblyID },
+                          { label: 'Location', value: assemblyLocation.name + ' (' + assemblyLocation.code + ')' },
+                        ],
                       }, () => action.execute(sig => assembleComponent(activeID, assy, sig))
                         .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
                       }
@@ -1091,11 +1253,70 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
                         <Field id="assy-asmblr" label="Assembler" value={fabricIdentity} onChange={() => {}} readOnly />
-                        <Field id="assy-id" label="Assembly ID" value={assy.assemblyID} onChange={v => setAssy(p => ({ ...p, assemblyID: v }))} placeholder="ASSY-001" />
-                        <Field id="assy-loc" label="Location" value={assy.location} onChange={v => setAssy(p => ({ ...p, location: v }))} placeholder="Mysuru" />
+                        <div className="form-group full-width">
+                          <label className="form-label" htmlFor="assy-id">Assembly ID</label>
+                          <input
+                            id="assy-id"
+                            type="text"
+                            className="form-input mono"
+                            value={buildAssemblyIdPreview(activeID)}
+                            placeholder="Generated from Component ID"
+                            readOnly
+                          />
+                          <div style={{
+                            marginTop: 'var(--space-2)',
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--text-secondary)',
+                          }}>
+                            Generated automatically. Format: ASSY-&#123;TYPE4&#125;-&#123;NUMBER2&#125;&#123;DDMMYY&#125;&#123;SERIAL3&#125;.
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label" htmlFor="assy-loc">
+                            Assembly Location <span className="form-required">*</span>
+                          </label>
+                          <select
+                            id="assy-loc"
+                            className="form-input"
+                            value={assy.locationId}
+                            onChange={e => setAssy(p => ({ ...p, locationId: e.target.value }))}
+                            disabled={locationsLoading}
+                            required
+                          >
+                            <option value="">
+                              {locationsLoading ? 'Loading locations…' : 'Select assembly location'}
+                            </option>
+                            {locations.map(location => (
+                              <option key={location.id} value={location.id}>
+                                {location.name} · {location.code} · {location.pincode}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
+                      {locationsError && (
+                        <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-4)' }}>
+                          <span className="alert-icon">✕</span>
+                          <div className="alert-body">
+                            <div className="alert-title">Locations Unavailable</div>
+                            <div className="alert-message">{locationsError}</div>
+                          </div>
+                        </div>
+                      )}
                       <div style={{ marginTop: 'var(--space-5)' }}>
-                        <button type="submit" className="btn btn-primary" id="btn-assemble" disabled={!assy.assemblyID || !assy.location}>Assemble Component</button>
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          id="btn-assemble"
+                          disabled={
+                            !activeID ||
+                            !buildAssemblyIdPreview(activeID) ||
+                            !assy.locationId ||
+                            locationsLoading
+                          }
+                        >
+                          Assemble Component
+                        </button>
                       </div>
                     </form>
                   )}
