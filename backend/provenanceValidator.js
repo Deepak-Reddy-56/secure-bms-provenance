@@ -142,36 +142,65 @@ function validateProvenance(history) {
   const sequenceValid =
     actualSequence.length === EXPECTED_SEQUENCE.length &&
     actualSequence.every((eventType, index) => eventType === EXPECTED_SEQUENCE[index]);
+  const requiredEventsPresent =
+    EXPECTED_SEQUENCE.every(stage => actualSequence.includes(stage));
+  const actorDataComplete =
+    events.every(event => hasValue(event?.actor));
+  const timestampsValid =
+    events.every(event => validTimestamp(event?.timestamp));
+  const locationsComplete =
+    events.every(event => {
+      switch (event?.eventType) {
+        case 'SHIPPED':
+          return hasValue(event?.from) && hasValue(event?.to);
+        case 'MANUFACTURED':
+        case 'CERTIFIED':
+        case 'RECEIVED':
+        case 'TRANSFERRED':
+        case 'ASSEMBLED':
+          return hasValue(event?.location);
+        default:
+          return false;
+      }
+    });
+
+  const valid = uniqueIssues.length === 0;
+  const condition = valid
+    ? 'VALID'
+    : (!requiredEventsPresent || !actorDataComplete || !timestampsValid || !locationsComplete)
+      ? 'INCOMPLETE'
+      : 'INCONSISTENT';
+
+  const warning = valid
+    ? null
+    : condition === 'INCOMPLETE'
+      ? {
+          title: 'Incomplete provenance',
+          message: 'Required lifecycle events or provenance information are missing.',
+        }
+      : {
+          title: 'Provenance inconsistency detected',
+          message: 'The recorded lifecycle events do not follow the expected sequence.',
+        };
 
   return {
-    valid: uniqueIssues.length === 0,
-    status: uniqueIssues.length === 0 ? 'PROVENANCE VALID' : 'PROVENANCE INVALID',
-    message: uniqueIssues.length === 0
+    valid,
+    status: valid ? 'PROVENANCE VALID' : 'PROVENANCE INVALID',
+    message: valid
       ? 'All required lifecycle events are present and in the expected sequence.'
       : 'Provenance consistency checks failed.',
+    condition,
+    warning,
     expectedSequence: [...EXPECTED_SEQUENCE],
     actualSequence,
     completedStages: EXPECTED_SEQUENCE.filter(stage => actualSequence.includes(stage)).length,
     issues: uniqueIssues,
     checks: {
       sequenceValid,
-      requiredEventsPresent: EXPECTED_SEQUENCE.every(stage => actualSequence.includes(stage)),
-      actorDataComplete: events.every(event => hasValue(event?.actor)),
-      timestampsValid: events.every(event => validTimestamp(event?.timestamp)),
-      locationsComplete: events.every(event => {
-        switch (event?.eventType) {
-          case 'SHIPPED':
-            return hasValue(event?.from) && hasValue(event?.to);
-          case 'MANUFACTURED':
-          case 'CERTIFIED':
-          case 'RECEIVED':
-          case 'TRANSFERRED':
-          case 'ASSEMBLED':
-            return hasValue(event?.location);
-          default:
-            return false;
-        }
-      }),
+      requiredEventsPresent,
+      actorDataComplete,
+      timestampsValid,
+      locationsComplete,
     },
   };
 }
