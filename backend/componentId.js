@@ -113,6 +113,24 @@ function validateComponentIdFormat(componentID) {
     };
   }
 
+  if (parsed.componentNumber === '00') {
+    return {
+      valid: false,
+      status: 'LEGACY_OR_INVALID',
+      message: 'Component number must be between 01 and 99.',
+      parsed,
+    };
+  }
+
+  if (parsed.serial === '000') {
+    return {
+      valid: false,
+      status: 'LEGACY_OR_INVALID',
+      message: 'Component serial must begin at 001.',
+      parsed,
+    };
+  }
+
   if (!parsed.validDate) {
     return {
       valid: false,
