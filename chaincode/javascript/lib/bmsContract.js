@@ -15,13 +15,18 @@ const { Contract } = require('fabric-contract-api');
 const COMPONENT_ID_PATTERN = /^BMS-[A-Z]{4}-\d{11}$/;
 
 function isValidComponentDate(componentID) {
-    const match = componentID.match(/^BMS-[A-Z]{4}-\d{2}(\d{2})(\d{2})(\d{2})\d{3}$/);
+    const match = componentID.match(/^BMS-[A-Z]{4}-(\d{2})(\d{2})(\d{2})(\d{2})(\d{3})$/);
 
     if (!match) {
         return false;
     }
 
-    const [, dayPart, monthPart, yearPart] = match;
+    const [, componentNumber, dayPart, monthPart, yearPart, serial] = match;
+
+    if (componentNumber === '00' || serial === '000') {
+        return false;
+    }
+
     const day = Number(dayPart);
     const month = Number(monthPart);
     const year = 2000 + Number(yearPart);
