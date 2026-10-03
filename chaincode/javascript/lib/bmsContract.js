@@ -3,14 +3,12 @@
 const { Contract } = require('fabric-contract-api');
 
 /**
- * New component IDs must follow:
+ * Component IDs must follow:
  * BMS-{4-letter type code}-{2-digit component number}{DDMMYY}{3-digit serial}
  *
  * Example: BMS-MOTH-01300926001
  *
- * Legacy component IDs already on the ledger are intentionally not migrated
- * by this validation rule; the application verification layer can report them
- * as legacy while preserving their historical records.
+ * The canonical format is enforced for every component registration.
  */
 const COMPONENT_ID_PATTERN = /^BMS-[A-Z]{4}-\d{11}$/;
 
@@ -118,19 +116,6 @@ function validateShipmentID(componentID, shipmentID, shipmentDate, fromCode, toC
     if (!SHIPMENT_ID_PATTERN.test(shipmentID) || shipmentID !== expected) {
         throw new Error('Shipment ID must be system-generated as ' + expected + '.');
     }
-}
-
-function isFabricNetworkAdmin(ctx) {
-    const clientIdentity = ctx.clientIdentity;
-
-    if (!clientIdentity) {
-        return false;
-    }
-
-    const mspID = clientIdentity.getMSPID();
-    const fabricType = clientIdentity.getAttributeValue('hf.Type');
-
-    return mspID === 'Org1MSP' && fabricType === 'admin';
 }
 
 function validateNewComponentID(componentID) {
@@ -590,71 +575,7 @@ class BMSContract extends Contract {
      * - caller must be an Org1 Fabric administrator (hf.Type=admin);
      * - caller must explicitly supply TEST_DATA_CLEANUP;
      * - canonical component IDs can never be removed by this method;
-     * - only an existing ledger key is deleted.
-     *
-     * The deletion remains part of the immutable Fabric history.
-     */
-    async DeleteLegacyComponentForCleanup(
-        ctx,
-        componentID,
-        maintenanceReason
-    ) {
-        if (!componentID) {
-            throw new Error('Component ID is required.');
-        }
-
-        if (maintenanceReason !== 'TEST_DATA_CLEANUP') {
-            throw new Error(
-                'Maintenance reason must be TEST_DATA_CLEANUP.'
-            );
-        }
-
-        if (!isFabricNetworkAdmin(ctx)) {
-            throw new Error('Network administrator access required.');
-        }
-
-        if (
-            COMPONENT_ID_PATTERN.test(componentID) &&
-            isValidComponentDate(componentID)
-        ) {
-            throw new Error(
-                'Canonical component IDs cannot be removed by the test-data cleanup transaction.'
-            );
-        }
-
-        const componentBuffer = await ctx.stub.getState(componentID);
-
-        if (!componentBuffer || componentBuffer.length === 0) {
-            throw new Error('Component not found: ' + componentID);
-        }
-
-        await ctx.stub.deleteState(componentID);
-
-        return JSON.stringify({
-            componentID,
-            deleted: true,
-            maintenanceReason,
-            txId: ctx.stub.getTxID()
-        });
-    }
-
-    async GetComponentHistory(ctx, componentID) {
-        if (!componentID) {
-            throw new Error('Component ID is required.');
-        }
-
-        const componentBuffer =
-            await ctx.stub.getState(componentID);
-
-        if (!componentBuffer ||
-            componentBuffer.length === 0) {
-            throw new Error(
-                `Component not found: ${componentID}`
-            );
-        }
-
-        const iterator =
-            await ctx.stub.getHistoryForKey(componentID);
+     * - only an existub.getHistoryForKey(componentID);
 
         const history = [];
 
