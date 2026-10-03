@@ -304,6 +304,62 @@ export function ProvenancePage({ initialComponentID = '' }: ProvenancePageProps)
         </div>
       )}
 
+      {/* Fabric transaction evidence — reuses the immutable provenance history. */}
+      {history.events.length > 0 && (
+        <div className="panel" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="panel-header">
+            <div>
+              <span className="panel-title">Fabric Transaction Evidence</span>
+              <div style={{
+                marginTop: 'var(--space-1)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--text-secondary)',
+              }}>
+                Transaction IDs captured from the component history recorded on Hyperledger Fabric.
+              </div>
+            </div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+              {history.events.filter(event => Boolean(event.txId)).length} / {history.events.length} transactions
+            </span>
+          </div>
+
+          <div className="panel-body flush">
+            <table className="data-table" aria-label="Fabric transaction evidence">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Lifecycle Event</th>
+                  <th>Transaction ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.events.map((event, index) => (
+                  <tr key={`fabric-tx-${event.eventType}-${index}`}>
+                    <td className="col-mono">{formatDate(event.timestamp)}</td>
+                    <td>
+                      <span style={{
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 700,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                      }}>
+                        {event.eventType}
+                      </span>
+                    </td>
+                    <td className="col-mono" style={{
+                      fontSize: 'var(--text-xs)',
+                      wordBreak: 'break-all',
+                    }}>
+                      {event.txId || 'Not available'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Timeline panel */}
       <div className="panel">
         {loadedID && (
