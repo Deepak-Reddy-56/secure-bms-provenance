@@ -28,11 +28,38 @@ export function LoginPage() {
           textAlign: 'center',
         }}
       >
+        <div
+          aria-hidden="true"
+          style={{
+            width: 56,
+            height: 56,
+            margin: '0 auto 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+          }}
+        >
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            width="56"
+            height="56"
+          >
+            <rect x="1" y="6" width="5" height="4" rx="0.5" />
+            <rect x="10" y="6" width="5" height="4" rx="0.5" />
+            <line x1="6" y1="8" x2="10" y2="8" />
+          </svg>
+        </div>
+
         <h1
           style={{
             margin: 0,
             marginBottom: '10px',
             color: '#ffffff',
+            fontWeight: 600,
           }}
         >
           Component Provenance
