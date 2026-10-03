@@ -8,6 +8,7 @@ import { OverviewPage } from './pages/OverviewPage';
 import { ComponentsPage } from './pages/ComponentsPage';
 import { LifecyclePage } from './pages/LifecyclePage';
 import { ProvenancePage } from './pages/ProvenancePage';
+import { TransactionEvidencePage } from './pages/TransactionEvidencePage';
 import { AuditPage } from './pages/AuditPage';
 import { NetworkPage } from './pages/NetworkPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -19,6 +20,7 @@ const OPERATIONAL_PAGES: Page[] = [
   'components',
   'lifecycle',
   'provenance',
+  'transaction-evidence',
 ];
 
 const ROLE_PAGES: Record<UserRole, Page[]> = {
@@ -35,6 +37,7 @@ const ADMIN_PAGES: Page[] = [
   'admin-component-types',
   'admin-locations',
   'network',
+  'transaction-evidence',
 ];
 
 function canAccessPage(page: Page, role: UserRole | null, isAdmin: boolean): boolean {
@@ -50,6 +53,7 @@ const PAGE_TITLES: Record<Page, string> = {
   components: 'Component Verification',
   lifecycle: 'Component Lifecycle',
   provenance: 'Provenance History',
+  'transaction-evidence': 'Fabric Transaction Evidence',
   audit: 'Audit Log',
   network: 'Network Status',
   'admin-users': 'User Management',
@@ -109,6 +113,9 @@ function AppInner() {
 
       case 'provenance':
         return <ProvenancePage initialComponentID={provenanceComponentID} />;
+
+      case 'transaction-evidence':
+        return <TransactionEvidencePage />;
 
       case 'audit':
         return <AuditPage />;
