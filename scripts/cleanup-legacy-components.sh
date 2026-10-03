@@ -2,25 +2,27 @@
 set -euo pipefail
 
 # Development-only cleanup for legacy/non-canonical Fabric test records.
-# This script is intentionally not part of the application runtime.
-#
 # Safe by default:
-#   - without --apply: dry run only
-#   - with --apply: invokes the protected Fabric maintenance transaction
-#   - only the exact historical test IDs below are targeted
-#   - canonical IDs are rejected again by chaincode
+#   without --apply: dry run only
+#   with --apply: invokes the protected Fabric maintenance transaction
+# Only the exact historical test IDs below are targeted.
 
 FABRIC_SAMPLES_DIR="${FABRIC_SAMPLES_DIR:-$HOME/fabric/fabric-samples}"
 CHANNEL_NAME="${FABRIC_CHANNEL:-mychannel}"
 CHAINCODE_NAME="${FABRIC_CHAINCODE:-bmsprovenance}"
 APPLY=false
 
-if [[ "${1:-}" == "--apply" ]]; then
-  APPLY=true
-elif [[ "${1:-}" != "" ]]; then
-  echo "Usage: $0 [--apply]"
-  exit 2
-fi
+case "${1:-}" in
+  "")
+    ;;
+  --apply)
+    APPLY=true
+    ;;
+  *)
+    echo "Usage: $0 [--apply]"
+    exit 2
+    ;;
+esac
 
 PEER_BIN="$FABRIC_SAMPLES_DIR/bin/peer"
 TEST_NETWORK_DIR="$FABRIC_SAMPLES_DIR/test-network"
@@ -41,8 +43,8 @@ TARGET_IDS=(
 
 require_file() {
   local path="$1"
-  if [[ ! -f "$path" ]]; then
-    echo "Required Fabric file not found:"
+  if [[ ! -e "$path" ]]; then
+    echo "Required Fabric path not found:"
     echo "  $path"
     exit 1
   fi
@@ -53,6 +55,11 @@ require_file "$ADMIN_MSP"
 require_file "$PEER0_TLS_ROOTCERT"
 require_file "$PEER1_TLS_ROOTCERT"
 require_file "$ORDERER_CA"
+
+command -v jq >/dev/null 2>&1 || {
+  echo "jq is required. Install it with: sudo apt install -y jq"
+  exit 1
+}
 
 export PATH="$FABRIC_SAMPLES_DIR/bin:$PATH"
 export FABRIC_CFG_PATH="$FABRIC_SAMPLES_DIR/config"
@@ -65,26 +72,28 @@ export CORE_PEER_ADDRESS=localhost:7051
 query_component() {
   local component_id="$1"
   local args
-  args=$(jq -nc --arg id "$component_id"     '{Args:["GetComponent",$id]}')
-
-  "$PEER_BIN" chaincode query     -C "$CHANNEL_NAME"     -n "$CHAINCODE_NAME"     -c "$args" 2>&1
+  args=$(jq -nc --arg id "$component_id" '{Args:["GetComponent",$id]}')
+  "$PEER_BIN" chaincode query -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c "$args"
 }
 
 delete_component() {
   local component_id="$1"
   local args
-  args=$(jq -nc --arg id "$component_id"     '{Args:["DeleteLegacyComponentForCleanup",$id,"TEST_DATA_CLEANUP"]}')
-
-  "$PEER_BIN" chaincode invoke     -o localhost:7050     --ordererTLSHostnameOverride orderer.example.com     --tls     --cafile "$ORDERER_CA"     -C "$CHANNEL_NAME"     -n "$CHAINCODE_NAME"     --peerAddresses localhost:7051     --tlsRootCertFiles "$PEER0_TLS_ROOTCERT"     --peerAddresses localhost:9051     --tlsRootCertFiles "$PEER1_TLS_ROOTCERT"     --waitForEvent     --waitForEventTimeout 30s     -c "$args"
+  args=$(jq -nc --arg id "$component_id" '{Args:["DeleteLegacyComponentForCleanup",$id,"TEST_DATA_CLEANUP"]}')
+  "$PEER_BIN" chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "$ORDERER_CA" -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" --peerAddresses localhost:7051 --tlsRootCertFiles "$PEER0_TLS_ROOTCERT" --peerAddresses localhost:9051 --tlsRootCertFiles "$PEER1_TLS_ROOTCERT" --waitForEvent --waitForEventTimeout 30s -c "$args"
 }
 
 echo "BMS legacy/test-data cleanup"
 echo "Channel:   $CHANNEL_NAME"
 echo "Chaincode: $CHAINCODE_NAME"
-echo "Mode:      $([[ "$APPLY" == true ]] && echo APPLY || echo DRY-RUN)"
+if [[ "$APPLY" == true ]]; then
+  echo "Mode:      APPLY"
+else
+  echo "Mode:      DRY-RUN"
+fi
 echo
 
-if ! "$PEER_BIN" lifecycle chaincode querycommitted -C "$CHANNEL_NAME" 2>&1 | grep -q "$CHAINCODE_NAME"; then
+if ! "$PEER_BIN" lifecycle chaincode querycommitted -C "$CHANNEL_NAME" | grep -q "$CHAINCODE_NAME"; then
   echo "Chaincode '$CHAINCODE_NAME' is not committed on '$CHANNEL_NAME'."
   exit 1
 fi
@@ -95,20 +104,20 @@ skipped=0
 for component_id in "${TARGET_IDS[@]}"; do
   echo "Checking $component_id ..."
 
-  if output=$(query_component "$component_id"); then
+  if query_component "$component_id" >/dev/null 2>&1; then
     if [[ "$APPLY" == false ]]; then
       echo "  FOUND — would delete through Fabric maintenance transaction."
-      ((skipped+=1))
+      skipped=$((skipped + 1))
       continue
     fi
 
     echo "  FOUND — deleting..."
     delete_component "$component_id"
     echo "  DELETED"
-    ((deleted+=1))
+    deleted=$((deleted + 1))
   else
     echo "  NOT PRESENT — skipping."
-    ((skipped+=1))
+    skipped=$((skipped + 1))
   fi
 done
 
@@ -116,9 +125,8 @@ echo
 if [[ "$APPLY" == true ]]; then
   echo "Cleanup complete. Deleted: $deleted. Skipped/not present: $skipped."
 else
-  echo "Dry run complete."
-  echo "No ledger state was changed."
-  echo "Review the targets above, then run:"
+  echo "Dry run complete. No ledger state was changed."
+  echo "After reviewing the exact targets, run:"
   echo
   echo "  $0 --apply"
 fi
