@@ -11,6 +11,7 @@ export type Page =
   | 'components'
   | 'lifecycle'
   | 'provenance'
+  | 'transaction-evidence'
   | 'audit'
   | 'network'
   | 'admin-users'
@@ -30,6 +31,7 @@ const PAGE_LABELS: Record<Page, string> = {
   components:  'Components',
   lifecycle:   'Lifecycle',
   provenance:  'Provenance',
+  'transaction-evidence': 'Transaction Evidence',
   audit:       'Audit Log',
   network:                 'Network',
   'admin-users':            'User Management',
@@ -66,6 +68,13 @@ const icons: Record<string, ReactNode> = {
       <circle cx="13.5" cy="8" r="1.5" />
       <line x1="4" y1="8" x2="6.5" y2="8" />
       <line x1="9.5" y1="8" x2="12" y2="8" />
+    </svg>
+  ),
+  'transaction-evidence': (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="2" width="12" height="12" rx="1" />
+      <path d="M5 5h6M5 8h6M5 11h3" />
+      <path d="M11.5 10.5 13 12l2-2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   provenance: (
@@ -143,6 +152,7 @@ const OPERATIONAL_NAV: { id: Page; label: string }[] = [
   { id: 'components', label: 'Components' },
   { id: 'lifecycle',  label: 'Lifecycle'  },
   { id: 'provenance', label: 'Provenance' },
+  { id: 'transaction-evidence', label: 'Transaction Evidence' },
 ];
 
 const AUDITOR_NAV: { id: Page; label: string }[] = [
