@@ -120,6 +120,21 @@ async function createComponentOnLedger({ componentID, componentType, manufacture
     throw new Error(`Chaincode invocation failed: ${output}`);
   }
 
+  let txId;
+
+  // The invoke waits for commit before returning. Resolve the committed
+  // transaction from the component's immutable history for evidence display.
+  try {
+    txId = await getLatestTransactionId(componentID, identity);
+  } catch (err) {
+    // Do not convert a committed registration into a failed registration
+    // merely because the follow-up evidence lookup was temporarily unavailable.
+    console.warn(
+      `Fabric transaction evidence lookup failed for ${componentID}:`,
+      err.message
+    );
+  }
+
   return {
     componentID,
     componentType,
@@ -127,6 +142,7 @@ async function createComponentOnLedger({ componentID, componentType, manufacture
     manufactureDate,
     location,
     status: 'MANUFACTURED',
+    txId,
   };
 }
 
@@ -166,7 +182,18 @@ if (!componentID) {
   throw new Error('Component ID was not provided.');
 }
 
-const txId = await getLatestTransactionId(componentID, identity);
+let txId;
+
+try {
+  txId = await getLatestTransactionId(componentID, identity);
+} catch (err) {
+  // The ledger mutation has already committed; transaction evidence lookup
+  // should not make the mutation itself appear unsuccessful.
+  console.warn(
+    `Fabric transaction evidence lookup failed for ${fcn} / ${componentID}:`,
+    err.message
+  );
+}
 
 return {
   output,
@@ -186,25 +213,46 @@ async function queryChaincode(fcn, argsArray, identity) {
 }
 
 async function getLatestTransactionId(componentID, identity) {
-  const historyOutput = await queryChaincode(
-    'GetComponentHistory',
-    [componentID],
-    identity
-  );
+  const attempts = 5;
+  let lastError = null;
 
-  const history = JSON.parse(historyOutput);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const historyOutput = await queryChaincode(
+        'GetComponentHistory',
+        [componentID],
+        identity
+      );
 
-  if (!Array.isArray(history) || history.length === 0) {
-    throw new Error('Fabric transaction history was not returned.');
+      const history = JSON.parse(historyOutput);
+
+      if (!Array.isArray(history) || history.length === 0) {
+        throw new Error('Fabric transaction history was not returned.');
+      }
+
+      const latest = [...history]
+        .filter(entry => entry && entry.txId)
+        .sort((a, b) => {
+          const aTime = Date.parse(a.timestamp || '') || 0;
+          const bTime = Date.parse(b.timestamp || '') || 0;
+          return bTime - aTime;
+        })[0];
+
+      if (!latest?.txId) {
+        throw new Error('Fabric transaction ID was not returned.');
+      }
+
+      return latest.txId;
+    } catch (err) {
+      lastError = err;
+
+      if (attempt < attempts) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 250));
+      }
+    }
   }
 
-  const txId = history[0]?.txId;
-
-  if (!txId) {
-    throw new Error('Fabric transaction ID was not returned.');
-  }
-
-  return txId;
+  throw lastError || new Error('Fabric transaction evidence was not available.');
 }
 
 module.exports = {
