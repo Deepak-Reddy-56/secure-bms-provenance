@@ -108,7 +108,7 @@ function validateComponentIdFormat(componentID) {
   if (!parsed) {
     return {
       valid: false,
-      status: 'LEGACY_OR_INVALID',
+      status: 'INVALID',
       message: 'Component ID does not follow the required format.',
     };
   }
@@ -116,7 +116,7 @@ function validateComponentIdFormat(componentID) {
   if (parsed.componentNumber === '00') {
     return {
       valid: false,
-      status: 'LEGACY_OR_INVALID',
+      status: 'INVALID',
       message: 'Component ID does not follow the required format.',
       parsed,
     };
@@ -125,7 +125,7 @@ function validateComponentIdFormat(componentID) {
   if (parsed.serial === '000') {
     return {
       valid: false,
-      status: 'LEGACY_OR_INVALID',
+      status: 'INVALID',
       message: 'Component ID does not follow the required format.',
       parsed,
     };
