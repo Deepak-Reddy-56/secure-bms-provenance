@@ -179,6 +179,7 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
         { id: 'admin-users' as Page, label: PAGE_LABELS['admin-users'] },
         { id: 'admin-component-types' as Page, label: PAGE_LABELS['admin-component-types'] },
         { id: 'admin-locations' as Page, label: PAGE_LABELS['admin-locations'] },
+        { id: 'transaction-evidence' as Page, label: PAGE_LABELS['transaction-evidence'] },
         { id: 'network' as Page, label: PAGE_LABELS.network },
       ]
     : role === 'AUDITOR'
