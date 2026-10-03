@@ -44,9 +44,9 @@ test('rejects invalid date values', () => {
   assert.equal(result.status, 'INVALID_DATE');
 });
 
-test('identifies the existing legacy ID as non-standard', () => {
+test('rejects a non-canonical component ID', () => {
   const result = validateComponentIdFormat('BMS-2026-001');
 
   assert.equal(result.valid, false);
-  assert.equal(result.status, 'LEGACY_OR_INVALID');
+  assert.equal(result.status, 'INVALID');
 });
