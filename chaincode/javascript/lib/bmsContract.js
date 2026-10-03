@@ -119,6 +119,20 @@ function validateShipmentID(componentID, shipmentID, shipmentDate, fromCode, toC
         throw new Error('Shipment ID must be system-generated as ' + expected + '.');
     }
 }
+
+function isFabricNetworkAdmin(ctx) {
+    const clientIdentity = ctx.clientIdentity;
+
+    if (!clientIdentity) {
+        return false;
+    }
+
+    const mspID = clientIdentity.getMSPID();
+    const fabricType = clientIdentity.getAttributeValue('hf.Type');
+
+    return mspID === 'Org1MSP' && fabricType === 'admin';
+}
+
 function validateNewComponentID(componentID) {
     if (!COMPONENT_ID_PATTERN.test(componentID) || !isValidComponentDate(componentID)) {
         throw new Error(
@@ -565,6 +579,65 @@ class BMSContract extends Contract {
         /**
      * Retrieve the complete ledger history for a component.
      */
+
+    /**
+     * Remove a known legacy/test component from Fabric world state.
+     *
+     * This is a maintenance-only transaction. It is intentionally not exposed
+     * through the application API or frontend.
+     *
+     * Security controls:
+     * - caller must be an Org1 Fabric administrator (hf.Type=admin);
+     * - caller must explicitly supply TEST_DATA_CLEANUP;
+     * - canonical component IDs can never be removed by this method;
+     * - only an existing ledger key is deleted.
+     *
+     * The deletion remains part of the immutable Fabric history.
+     */
+    async DeleteLegacyComponentForCleanup(
+        ctx,
+        componentID,
+        maintenanceReason
+    ) {
+        if (!componentID) {
+            throw new Error('Component ID is required.');
+        }
+
+        if (maintenanceReason !== 'TEST_DATA_CLEANUP') {
+            throw new Error(
+                'Maintenance reason must be TEST_DATA_CLEANUP.'
+            );
+        }
+
+        if (!isFabricNetworkAdmin(ctx)) {
+            throw new Error('Network administrator access required.');
+        }
+
+        if (
+            COMPONENT_ID_PATTERN.test(componentID) &&
+            isValidComponentDate(componentID)
+        ) {
+            throw new Error(
+                'Canonical component IDs cannot be removed by the test-data cleanup transaction.'
+            );
+        }
+
+        const componentBuffer = await ctx.stub.getState(componentID);
+
+        if (!componentBuffer || componentBuffer.length === 0) {
+            throw new Error('Component not found: ' + componentID);
+        }
+
+        await ctx.stub.deleteState(componentID);
+
+        return JSON.stringify({
+            componentID,
+            deleted: true,
+            maintenanceReason,
+            txId: ctx.stub.getTxID()
+        });
+    }
+
     async GetComponentHistory(ctx, componentID) {
         if (!componentID) {
             throw new Error('Component ID is required.');
