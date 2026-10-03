@@ -38,7 +38,7 @@ The Manufacturer selects an active Component Type and enters the manufacturer, m
 
 The administrator can add or deactivate Component Types from **Administration → Component Type Registry**. Type codes and component numbers are unique and are not reused through the registry.
 
-Only the canonical Component ID format is supported. Non-canonical or legacy IDs are rejected and are not part of the application data model.
+Only the canonical Component ID format is supported. Non-canonical IDs are rejected and are not part of the application data model.
 
 ## Technology
 
