@@ -109,7 +109,7 @@ function validateComponentIdFormat(componentID) {
     return {
       valid: false,
       status: 'LEGACY_OR_INVALID',
-      message: 'Component ID does not follow the BMS-{TYPE}-{NUMBER}{DDMMYY}{SERIAL} format.',
+      message: 'Component ID does not follow the required format.',
     };
   }
 
@@ -117,7 +117,7 @@ function validateComponentIdFormat(componentID) {
     return {
       valid: false,
       status: 'LEGACY_OR_INVALID',
-      message: 'Component number must be between 01 and 99.',
+      message: 'Component ID does not follow the required format.',
       parsed,
     };
   }
@@ -126,7 +126,7 @@ function validateComponentIdFormat(componentID) {
     return {
       valid: false,
       status: 'LEGACY_OR_INVALID',
-      message: 'Component serial must begin at 001.',
+      message: 'Component ID does not follow the required format.',
       parsed,
     };
   }
@@ -135,7 +135,7 @@ function validateComponentIdFormat(componentID) {
     return {
       valid: false,
       status: 'INVALID_DATE',
-      message: 'Component ID contains an invalid manufacture date.',
+      message: 'Component ID does not follow the required format.',
       parsed,
     };
   }
