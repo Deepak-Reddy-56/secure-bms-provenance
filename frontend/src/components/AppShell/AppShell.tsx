@@ -161,7 +161,7 @@ const AUDITOR_NAV: { id: Page; label: string }[] = [
 ];
 
 export function AppShell({ children, currentPage, onNavigate, networkStatus, pageTitle }: AppShellProps) {
-  const { role, fabricIdentity, user, isAdmin, logout } = useAuth();
+  const { role, user, isAdmin, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   const roleLabel = isAdmin
@@ -170,9 +170,11 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
       ? ROLE_LABELS[role]
       : 'Unknown';
 
-  const identityLabel = isAdmin
-    ? 'Application Admin'
-    : fabricIdentity || 'Unassigned';
+  const accessDescription = isAdmin
+    ? 'Network and configuration access'
+    : role === 'AUDITOR'
+      ? 'Read-only audit access'
+      : 'Operational access';
 
   const navItems = isAdmin
     ? [
@@ -232,12 +234,12 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
           {!collapsed && (
             <div className="sidebar-identity">
               <span className="sidebar-identity-label">
-                {isAdmin ? 'Account' : 'Current Identity'}
+                {isAdmin ? 'Account type' : 'Assigned role'}
               </span>
               <span className="sidebar-identity-id">
-                {identityLabel}
+                {roleLabel}
               </span>
-              <span className="sidebar-identity-role">{roleLabel}</span>
+              <span className="sidebar-identity-role">{accessDescription}</span>
             </div>
           )}
           {isAdmin && (
@@ -289,6 +291,7 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
             <button
               type="button"
               className="header-logout"
+              aria-label="Sign out of Component Provenance"
               onClick={() => void logout()}
             >
               Sign out
