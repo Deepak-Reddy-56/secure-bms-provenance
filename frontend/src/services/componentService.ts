@@ -105,7 +105,6 @@ export async function receiveComponent(
 export interface OperationalAssembler {
   id: string;
   name: string;
-  fabricIdentity: string;
 }
 
 export async function getActiveAssembler(
