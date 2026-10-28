@@ -161,7 +161,7 @@ const AUDITOR_NAV: { id: Page; label: string }[] = [
 ];
 
 export function AppShell({ children, currentPage, onNavigate, networkStatus, pageTitle }: AppShellProps) {
-  const { role, user, isAdmin, logout } = useAuth();
+  const { role, user, isAdmin, logout, authError } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   const roleLabel = isAdmin
@@ -301,6 +301,18 @@ export function AppShell({ children, currentPage, onNavigate, networkStatus, pag
 
         {/* Page content */}
         <main id="main-content" className="page-content">
+          {authError && (
+            <div
+              className="alert alert-error"
+              role="alert"
+              style={{ marginBottom: 'var(--space-5)' }}
+            >
+              <div className="alert-body">
+                <div className="alert-title">Authentication notice</div>
+                <div className="alert-message">{authError}</div>
+              </div>
+            </div>
+          )}
           {children}
         </main>
       </div>
