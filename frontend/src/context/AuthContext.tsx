@@ -196,15 +196,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await logoutFromServer();
     } catch {
-      // Clear local state even when the server is unavailable.
-    } finally {
-      if (window.google) {
-        window.google.accounts.id.disableAutoSelect();
-      }
-
-      clearSession();
-      setAuthError(null);
+      setAuthError(
+        'Sign out could not be confirmed because the server could not invalidate your session. Check the backend connection and try again.'
+      );
+      return;
     }
+
+    if (window.google) {
+      window.google.accounts.id.disableAutoSelect();
+    }
+
+    clearSession();
+    setAuthError(null);
   }, [clearSession]);
 
   useEffect(() => {
