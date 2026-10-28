@@ -157,9 +157,9 @@ function buildShipmentIdPreview(
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
 export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
-  const { role, fabricIdentity, user } = useAuth();
+  const { role, user } = useAuth();
 
-  if (!role || !fabricIdentity) {
+  if (!role) {
     throw new Error('ComponentsPage requires an operational user.');
   }
 
@@ -1261,7 +1261,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                         title: 'Assemble Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
                         fields: [
-                          { label: 'Assembler', value: fabricIdentity },
+                          { label: 'Assembler', value: actorLabel },
                           { label: 'Assembly ID', value: assemblyID },
                           { label: 'Location', value: assemblyLocation.name + ' (' + assemblyLocation.code + ')' },
                         ],
