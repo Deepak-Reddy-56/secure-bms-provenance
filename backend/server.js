@@ -75,6 +75,15 @@ const {
 
 const OPERATIONAL_ROLES = new Set(VALID_ROLES);
 
+const ROLE_SCOPED_API_PREFIXES = [
+  { prefix: '/api/manufacturer/', role: 'MANUFACTURER' },
+  { prefix: '/api/certifier/', role: 'CERTIFIER' },
+  { prefix: '/api/transporter/', role: 'TRANSPORTER' },
+  { prefix: '/api/warehouse/', role: 'WAREHOUSE' },
+  { prefix: '/api/assembler/', role: 'ASSEMBLER' },
+  { prefix: '/api/auditor/', role: 'AUDITOR' },
+];
+
 
 
 const PORT = process.env.PORT || 3000;
@@ -195,6 +204,27 @@ function hasRole(session, role) {
 
 function getFabricReadIdentity(session) {
   return session.isAdmin === true ? 'auditor1' : session.fabricIdentity;
+}
+
+function getRequiredRoleForPath(pathname) {
+  return ROLE_SCOPED_API_PREFIXES.find(({ prefix }) =>
+    pathname.startsWith(prefix)
+  )?.role || null;
+}
+
+function toOperationalComponentView(component) {
+  if (!component || typeof component !== 'object') {
+    return null;
+  }
+
+  return {
+    componentID: component.componentID,
+    componentType: component.componentType,
+    manufacturer: component.manufacturer,
+    manufactureDate: component.manufactureDate,
+    location: component.location,
+    status: component.status,
+  };
 }
 
 function getActiveAssembler() {
@@ -625,6 +655,21 @@ const server = http.createServer(async (req, res) => {
       }));
     }
 
+    if (pathname.startsWith('/api/admin/') && session.isAdmin !== true) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: 'Administrator access required.',
+      }));
+    }
+
+    const requiredRole = getRequiredRoleForPath(pathname);
+    if (requiredRole && !hasRole(session, requiredRole)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: `This endpoint requires the ${requiredRole} role.`,
+      }));
+    }
+
     if (req.method === 'GET' && pathname === '/api/health/fabric') {
       if (session.isAdmin !== true) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
@@ -914,7 +959,9 @@ const server = http.createServer(async (req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          locations: listLocations({ includeInactive: false }),
+          locations: listLocations({ includeInactive: false }).map(
+            ({ id, name }) => ({ id, name })
+          ),
         }));
       } catch (err) {
         console.error('Location catalog read failed:', err.message);
@@ -937,8 +984,11 @@ const server = http.createServer(async (req, res) => {
 
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' });
+        const assembler = getActiveAssembler();
         return res.end(JSON.stringify({
-          assembler: getActiveAssembler(),
+          assembler: assembler
+            ? { id: assembler.id, name: assembler.name }
+            : null,
         }));
       } catch (err) {
         console.error('Assembler assignment read failed:', err.message);
@@ -1068,13 +1118,9 @@ const server = http.createServer(async (req, res) => {
         }, identity);
 
         res.writeHead(201, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({
-          ...result,
-          componentTypeCode: typeConfig.code,
-          componentNumber: typeConfig.componentNumber,
-          serialNumber,
-          generatedComponentID: componentID,
-        }));
+        return res.end(JSON.stringify(
+          toOperationalComponentView(result)
+        ));
       } catch (err) {
         console.error('Error creating component:', err);
         const msg = cleanFabricError(err);
@@ -1169,20 +1215,14 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           verified: true,
           verificationStatus: 'COMPONENT VERIFIED',
-          component,
+          component: toOperationalComponentView(component),
           idFormat: {
             valid: idFormat.valid,
             status: idFormat.status,
             message: idFormat.message,
           },
           typeConfiguration: typeConfiguration
-            ? {
-                id: typeConfiguration.id,
-                name: typeConfiguration.name,
-                code: typeConfiguration.code,
-                componentNumber: typeConfiguration.componentNumber,
-                active: typeConfiguration.active,
-              }
+            ? { name: typeConfiguration.name }
             : null,
           typeConfigurationStatus,
           currentHolder: getCurrentHolder(component),
@@ -1285,7 +1325,7 @@ const server = http.createServer(async (req, res) => {
         try {
           const result = await getComponentFromLedger(id, identity);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify(result));
+          return res.end(JSON.stringify(toOperationalComponentView(result)));
         } catch (err) {
           const msg = cleanFabricError(err);
           const code = (msg.includes('not found') || msg.includes('does not exist')) ? 404 : 500;
@@ -1309,7 +1349,7 @@ const server = http.createServer(async (req, res) => {
       const certificateID = `CERT-${id}`;
 
       try {
-        const { output, txId } = await invokeChaincode(
+        const { output } = await invokeChaincode(
           'CertifyComponent',
           [
             id,
@@ -1333,8 +1373,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: `Component ${id} certified successfully`,
-          component,
-          txId
+          component: toOperationalComponentView(component)
         }));
 
       } catch (err) {
@@ -1405,7 +1444,7 @@ const server = http.createServer(async (req, res) => {
           toCode: toLocation.code,
         });
 
-        const { output, txId } = await invokeChaincode(
+        const { output } = await invokeChaincode(
           'ShipComponent',
           [
             id,
@@ -1434,15 +1473,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: 'Component ' + id + ' shipped successfully',
-          component: updatedComponent,
-          componentType: typeConfig.name,
-          componentTypeCode: typeConfig.code,
-          componentNumber: typeConfig.componentNumber,
-          shipmentID,
-          shipmentDate,
-          fromLocation,
-          toLocation,
-          txId
+          component: toOperationalComponentView(updatedComponent)
         }));
 
       } catch (err) {
@@ -1483,7 +1514,7 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
-        const { output, txId } = await invokeChaincode(
+        const { output } = await invokeChaincode(
           'ReceiveComponent',
           [
             id,
@@ -1506,8 +1537,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: `Component ${id} received successfully`,
-          component,
-          txId
+          component: toOperationalComponentView(component)
         }));
 
       } catch (err) {
@@ -1583,7 +1613,7 @@ const server = http.createServer(async (req, res) => {
           );
         }
 
-        const { output, txId } = await invokeChaincode(
+        const { output } = await invokeChaincode(
           'TransferCustody',
           [
             id,
@@ -1607,8 +1637,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: `Component ${id} custody transferred successfully`,
-          component,
-          txId
+          component: toOperationalComponentView(component)
         }));
 
       } catch (err) {
@@ -1682,7 +1711,7 @@ const server = http.createServer(async (req, res) => {
           );
         }
 
-        const { output, txId } = await invokeChaincode(
+        const { output } = await invokeChaincode(
           'AssembleComponent',
           [
             id,
@@ -1705,8 +1734,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: `Component ${id} assembled successfully`,
-          component,
-          txId
+          component: toOperationalComponentView(component)
         }));
 
       } catch (err) {
