@@ -772,7 +772,9 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           connected: health.connected,
           network: health.network,
-          chaincode: health.chaincode
+          chaincode: health.chaincode,
+          details: health.details,
+          error: health.connected ? undefined : health.error,
         }));
       } catch (err) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
