@@ -71,13 +71,7 @@ const output = await execWSLPeer(
         network: CHANNEL_NAME,
         chaincode: CHAINCODE_NAME,
         identity: HEALTH_IDENTITY,
-        details: {
-          peer: 'peer0.org1.example.com:7051',
-          mspId: 'Org1MSP',
-          orderer: 'orderer.example.com:7050',
-          channel: CHANNEL_NAME,
-          chaincode: CHAINCODE_NAME,
-        },
+        details: FABRIC_DETAILS,
       };
     } else {
       return {
@@ -85,6 +79,7 @@ const output = await execWSLPeer(
         error: `Chaincode '${CHAINCODE_NAME}' is not deployed on channel '${CHANNEL_NAME}'. Committed chaincodes: ${output || 'None'}`,
         network: CHANNEL_NAME,
         chaincode: CHAINCODE_NAME,
+        details: FABRIC_DETAILS,
       };
     }
   } catch (err) {
@@ -93,9 +88,18 @@ const output = await execWSLPeer(
       error: `Fabric Peer connection failed: ${err.message}`,
       network: CHANNEL_NAME,
       chaincode: CHAINCODE_NAME,
+      details: FABRIC_DETAILS,
     };
   }
 }
+
+const FABRIC_DETAILS = {
+  peer: 'peer0.org1.example.com:7051',
+  mspId: 'Org1MSP',
+  orderer: 'orderer.example.com:7050',
+  channel: CHANNEL_NAME,
+  chaincode: CHAINCODE_NAME,
+};
 
 function formatChaincodeArgs(fcn, argsArray = []) {
   const jsonStr = JSON.stringify({ Args: [fcn, ...argsArray] });
