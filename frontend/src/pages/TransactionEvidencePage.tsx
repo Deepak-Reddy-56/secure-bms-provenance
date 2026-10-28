@@ -56,7 +56,7 @@ function TransactionEvidenceTable({ events }: { events: ProvenanceEvent[] }) {
 export function TransactionEvidencePage() {
   const [searchInput, setSearchInput] = useState('');
   const [loadedID, setLoadedID] = useState('');
-  const history = useProvenanceHistory();
+  const history = useProvenanceHistory('/api/auditor/components');
 
   const handleLoad = () => {
     const componentID = searchInput.trim();
