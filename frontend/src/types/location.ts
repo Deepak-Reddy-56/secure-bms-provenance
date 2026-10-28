@@ -6,3 +6,8 @@ export interface LocationConfig {
   active: boolean;
   createdAt: string;
 }
+
+export interface OperationalLocation {
+  id: string;
+  name: string;
+}
