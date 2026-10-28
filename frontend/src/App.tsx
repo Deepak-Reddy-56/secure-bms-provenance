@@ -60,7 +60,7 @@ const PAGE_TITLES: Record<Page, string> = {
 };
 
 function AppInner() {
-  const { role, isAdmin } = useAuth();
+  const { role, fabricIdentity, isAdmin, logout } = useAuth();
   const defaultPage: Page = isAdmin ? 'admin-users' : 'overview';
   const [currentPage, setCurrentPage] = useState<Page>(defaultPage);
   const [provenanceComponentID, setProvenanceComponentID] = useState('');
@@ -93,6 +93,24 @@ function AppInner() {
       void refresh();
     }
   }, [isAdmin, refresh]);
+
+  if (!isAdmin && (!role || !fabricIdentity)) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <section style={{ maxWidth: 520, textAlign: 'center' }}>
+          <h1>Operational role unavailable</h1>
+          <p>
+            This account is authenticated, but the server did not return a valid operational role
+            and Fabric identity. Sign out and sign in again. If this continues, ask the administrator
+            to verify this account's provisioning.
+          </p>
+          <button className="btn btn-primary" type="button" onClick={() => void logout()}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   const renderPage = () => {
     switch (currentPage) {
