@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useProvenanceHistory } from '../hooks/useLifecycleAction';
 import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
 import { validateComponentProvenance } from '../services/componentService';
@@ -113,12 +114,15 @@ interface ProvenancePageProps {
 }
 
 export function ProvenancePage({ initialComponentID = '' }: ProvenancePageProps) {
+  const { role } = useAuth();
   const [searchInput, setSearchInput] = useState(initialComponentID);
   const [loadedID,    setLoadedID]    = useState('');
   const [validation, setValidation] = useState<ProvenanceValidationResult | null>(null);
   const [validationLoading, setValidationLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
-  const history = useProvenanceHistory();
+  const history = useProvenanceHistory(
+    role === 'AUDITOR' ? '/api/auditor/components' : '/api/components'
+  );
 
   useEffect(() => {
     const componentID = initialComponentID.trim();
