@@ -103,7 +103,6 @@ export async function receiveComponent(
 }
 
 export interface OperationalAssembler {
-  id: string;
   name: string;
 }
 
