@@ -84,7 +84,7 @@ const statusLabels: Record<NetworkStatus, string> = {
 };
 
 export function Header({ networkStatus }: HeaderProps) {
-  const { user, role, fabricIdentity, isAdmin } = useAuth();
+  const { user, role, isAdmin } = useAuth();
 
   const roleLabel = isAdmin
     ? 'Administrator'
@@ -92,9 +92,13 @@ export function Header({ networkStatus }: HeaderProps) {
       ? ROLE_LABELS[role]
       : 'Unassigned';
 
-  const identityLabel = isAdmin
-    ? 'Application Admin'
-    : fabricIdentity || 'Unassigned';
+  const accessLabel = isAdmin
+    ? 'Network and configuration access'
+    : role === 'AUDITOR'
+      ? 'Read-only audit access'
+      : role
+        ? 'Operational access'
+        : 'Unassigned';
 
   return (
     <header className="header" role="banner">
@@ -122,7 +126,7 @@ export function Header({ networkStatus }: HeaderProps) {
             <div className="header-identity-row">
               <span className="header-identity-label">Identity</span>
               <span className="header-identity-value mono">
-                {identityLabel}
+                {accessLabel}
               </span>
             </div>
             <div className="header-identity-row">
