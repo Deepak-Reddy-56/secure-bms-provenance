@@ -11,7 +11,6 @@ export interface GoogleAuthResponse {
   authenticated: boolean;
   user: GoogleAuthUser;
   role: UserRole | null;
-  fabricIdentity: string | null;
   isAdmin: boolean;
 }
 
@@ -27,7 +26,6 @@ export interface CurrentSessionResponse {
   authenticated: boolean;
   user: GoogleAuthUser;
   role: UserRole | null;
-  fabricIdentity: string | null;
   isAdmin: boolean;
 }
 
