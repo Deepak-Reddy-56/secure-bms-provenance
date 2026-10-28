@@ -132,12 +132,6 @@ export function ProvenanceEventCard({ event }: ProvenanceEventCardProps) {
       {event.eventType === 'TRANSFERRED'  && <TransferredFields  event={event} />}
       {event.eventType === 'ASSEMBLED'    && <AssembledFields    event={event} />}
 
-      {event.txId && (
-        <div className="event-txid">
-          <span className="event-txid-label">Transaction ID</span>
-          <span className="event-txid-value">{event.txId}</span>
-        </div>
-      )}
     </article>
   );
 }
