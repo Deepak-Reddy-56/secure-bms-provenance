@@ -15,21 +15,20 @@ import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
 import type { UserRole } from './types/identity';
 
-const OPERATIONAL_PAGES: Page[] = [
+const STANDARD_WORKFLOW_PAGES: Page[] = [
   'overview',
   'components',
   'lifecycle',
   'provenance',
-  'transaction-evidence',
 ];
 
 const ROLE_PAGES: Record<UserRole, Page[]> = {
-  MANUFACTURER: OPERATIONAL_PAGES,
-  CERTIFIER: OPERATIONAL_PAGES,
-  TRANSPORTER: OPERATIONAL_PAGES,
-  WAREHOUSE: OPERATIONAL_PAGES,
-  ASSEMBLER: OPERATIONAL_PAGES,
-  AUDITOR: [...OPERATIONAL_PAGES, 'audit'],
+  MANUFACTURER: STANDARD_WORKFLOW_PAGES,
+  CERTIFIER: STANDARD_WORKFLOW_PAGES,
+  TRANSPORTER: STANDARD_WORKFLOW_PAGES,
+  WAREHOUSE: STANDARD_WORKFLOW_PAGES,
+  ASSEMBLER: STANDARD_WORKFLOW_PAGES,
+  AUDITOR: [...STANDARD_WORKFLOW_PAGES, 'transaction-evidence', 'audit'],
 };
 
 const ADMIN_PAGES: Page[] = [
@@ -37,7 +36,6 @@ const ADMIN_PAGES: Page[] = [
   'admin-component-types',
   'admin-locations',
   'network',
-  'transaction-evidence',
 ];
 
 function canAccessPage(page: Page, role: UserRole | null, isAdmin: boolean): boolean {
