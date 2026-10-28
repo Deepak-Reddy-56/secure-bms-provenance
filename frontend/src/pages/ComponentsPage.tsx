@@ -613,6 +613,12 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       <div className="tx-field-label">Actor</div>
                       <div className="tx-field-value">{actorLabel}</div>
                     </div>
+                    {action.result.shipmentID && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <div className="tx-field-label">Shipment Reference</div>
+                        <div className="tx-field-value mono">{action.result.shipmentID}</div>
+                      </div>
+                    )}
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-4)' }} onClick={action.reset}>
                     Perform Another Operation
