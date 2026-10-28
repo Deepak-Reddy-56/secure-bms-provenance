@@ -23,7 +23,6 @@ interface GoogleCredentialResponse {
 interface AuthContextValue {
   user: GoogleAuthUser | null;
   role: UserRole | null;
-  fabricIdentity: string | null;
   isAdmin: boolean;
   loading: boolean;
   authenticated: boolean;
@@ -39,7 +38,6 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GoogleAuthUser | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [fabricIdentity, setFabricIdentity] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -49,19 +47,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const applySession = useCallback((session: {
     user: GoogleAuthUser;
     role: UserRole | null;
-    fabricIdentity: string | null;
     isAdmin: boolean;
   }) => {
     setUser(session.user);
     setRole(session.role);
-    setFabricIdentity(session.fabricIdentity);
     setIsAdmin(session.isAdmin);
   }, []);
 
   const clearSession = useCallback(() => {
     setUser(null);
     setRole(null);
-    setFabricIdentity(null);
     setIsAdmin(false);
   }, []);
 
@@ -222,7 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         role,
-        fabricIdentity,
         isAdmin,
         loading,
         authenticated: Boolean(user),
