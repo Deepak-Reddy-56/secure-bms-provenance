@@ -1066,12 +1066,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       try {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
         const assembler = getActiveAssembler();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          assembler: assembler
-            ? { id: assembler.id, name: assembler.name }
-            : null,
+          assembler: assembler ? { name: assembler.name } : null,
         }));
       } catch (err) {
         console.error('Assembler assignment read failed:', err.message);
