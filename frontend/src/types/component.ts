@@ -92,6 +92,9 @@ export interface AssembleComponentPayload {
 export interface LifecycleActionResult {
   component: Component;
   message?: string;
+  /** Business shipment reference returned only after a successful shipment. */
+  shipmentID?: string;
+  shipmentDate?: string;
 }
 
 // ── State machine types ──────────────────────────────────────
