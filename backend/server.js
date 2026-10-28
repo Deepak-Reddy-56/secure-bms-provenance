@@ -69,10 +69,6 @@ const {
   validateProvenance,
 } = require('./provenanceValidator');
 
-const {
-  getCurrentHolder,
-} = require('./currentHolder');
-
 const OPERATIONAL_ROLES = new Set(VALID_ROLES);
 
 const ROLE_SCOPED_API_PREFIXES = [
@@ -225,6 +221,23 @@ function toOperationalComponentView(component) {
     location: component.location,
     status: component.status,
   };
+}
+
+function getOperationalCurrentHolder(component) {
+  switch (component?.status) {
+    case 'MANUFACTURED':
+    case 'CERTIFIED':
+      return component.manufacturer || 'Manufacturer';
+    case 'SHIPPED':
+      return 'Transporter';
+    case 'RECEIVED':
+      return 'Warehouse';
+    case 'TRANSFERRED':
+    case 'ASSEMBLED':
+      return 'Assembler';
+    default:
+      return null;
+  }
 }
 
 function getActiveAssembler() {
@@ -423,6 +436,78 @@ function normalizeProvenanceHistory(history) {
     })
     .filter(Boolean)
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function toOperationalProvenanceEvent(event) {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+
+  const base = {
+    eventType: event.eventType,
+    timestamp: event.timestamp,
+  };
+
+  switch (event.eventType) {
+    case 'MANUFACTURED':
+      return {
+        ...base,
+        actor: 'Manufacturer',
+        manufacturer: event.manufacturer,
+        location: event.location,
+      };
+
+    case 'CERTIFIED':
+      return {
+        ...base,
+        actor: 'Certifier',
+        certificateID: event.certificateID,
+        certificationDate: event.certificationDate,
+        complianceReference: event.complianceReference,
+        location: event.location,
+      };
+
+    case 'SHIPPED':
+      return {
+        ...base,
+        actor: 'Transporter',
+        transporter: 'Transporter',
+        from: event.from,
+        to: event.to,
+        shipmentDate: event.shipmentDate,
+      };
+
+    case 'RECEIVED':
+      return {
+        ...base,
+        actor: 'Warehouse',
+        warehouse: 'Warehouse',
+        location: event.location,
+        receivedDate: event.receivedDate,
+      };
+
+    case 'TRANSFERRED':
+      return {
+        ...base,
+        actor: 'Warehouse',
+        from: 'Warehouse',
+        to: 'Assembler',
+        location: event.location,
+        transferDate: event.transferDate,
+      };
+
+    case 'ASSEMBLED':
+      return {
+        ...base,
+        actor: 'Assembler',
+        assembler: 'Assembler',
+        assemblyID: event.assemblyID,
+        location: event.location,
+      };
+
+    default:
+      return null;
+  }
 }
 
 function cleanFabricError(err) {
@@ -1225,7 +1310,7 @@ const server = http.createServer(async (req, res) => {
             ? { name: typeConfiguration.name }
             : null,
           typeConfigurationStatus,
-          currentHolder: getCurrentHolder(component),
+          currentHolder: getOperationalCurrentHolder(component),
           provenanceAvailable,
           provenanceEventCount,
           provenanceStatus,
@@ -1818,7 +1903,9 @@ const server = http.createServer(async (req, res) => {
 
         // Standard operational provenance exposes lifecycle facts, not raw Fabric transaction IDs.
         // Transaction evidence is available only through the auditor-scoped endpoint.
-        const provenanceForRole = normalizedHistory.map(({ txId, ...event }) => event);
+        const provenanceForRole = normalizedHistory
+          .map(toOperationalProvenanceEvent)
+          .filter(Boolean);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(provenanceForRole));
