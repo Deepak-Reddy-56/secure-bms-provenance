@@ -50,7 +50,7 @@ export function NetworkPage({ networkStatus, health }: NetworkPageProps) {
                 )}
                 {networkStatus === 'connected' && (
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--success)', marginTop: 4 }}>
-                    Fabric peer connected. Channel: {health?.network || 'mychannel'}, Chaincode: {health?.chaincode || 'bmsprovenance'}
+                    Fabric peer connected. Channel: {health?.details?.channel || health?.network || 'Not available'}, Chaincode: {health?.details?.chaincode || health?.chaincode || 'Not available'}
                   </div>
                 )}
               </div>
@@ -83,8 +83,8 @@ export function NetworkPage({ networkStatus, health }: NetworkPageProps) {
                 Fabric Network Diagnostic Summary
               </div>
               <div style={{ marginBottom: 4 }}><strong>Endpoint:</strong> GET /api/health/fabric</div>
-              <div style={{ marginBottom: 4 }}><strong>Target Channel:</strong> {health?.network || 'mychannel'}</div>
-              <div style={{ marginBottom: 4 }}><strong>Target Chaincode:</strong> {health?.chaincode || 'bmsprovenance'}</div>
+              <div style={{ marginBottom: 4 }}><strong>Target Channel:</strong> {health?.details?.channel || health?.network || 'Not available'}</div>
+              <div style={{ marginBottom: 4 }}><strong>Target Chaincode:</strong> {health?.details?.chaincode || health?.chaincode || 'Not available'}</div>
               <div style={{ marginBottom: 6 }}><strong>Actual Error Message:</strong></div>
               <pre style={{
                 background: 'var(--bg-main)',
@@ -112,12 +112,12 @@ export function NetworkPage({ networkStatus, health }: NetworkPageProps) {
           <div className="panel-body">
             <div className="network-panel">
               {[
-                { key: 'Channel',         value: 'mychannel' },
-                { key: 'Chaincode',       value: 'bmsprovenance' },
-                { key: 'Organization',    value: 'Org1MSP' },
-                { key: 'Peer',            value: 'peer0.org1.example.com' },
-                { key: 'Orderer',         value: 'orderer.example.com' },
-                { key: 'Protocol',        value: 'Hyperledger Fabric v2.x' },
+                { key: 'Channel', value: health?.details?.channel || health?.network || 'Not available' },
+                { key: 'Chaincode', value: health?.details?.chaincode || health?.chaincode || 'Not available' },
+                { key: 'Organization', value: health?.details?.mspId || 'Not available' },
+                { key: 'Peer', value: health?.details?.peer || 'Not available' },
+                { key: 'Orderer', value: health?.details?.orderer || 'Not available' },
+                { key: 'Protocol', value: 'Hyperledger Fabric v2.x' },
               ].map(row => (
                 <div key={row.key} className="network-panel-row">
                   <span className="network-panel-key">{row.key}</span>
