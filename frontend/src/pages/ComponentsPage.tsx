@@ -1,13 +1,13 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ROLE_PERMISSIONS } from '../types/identity';
+import { ROLE_LABELS, ROLE_PERMISSIONS } from '../types/identity';
 import { useToast } from '../context/ToastContext';
 import { useComponentSearch, useRegistration } from '../hooks/useComponent';
 import { useLifecycleAction } from '../hooks/useLifecycleAction';
 import type { ComponentStatus } from '../types/component';
 import type { RegisterComponentPayload } from '../types/component';
 import type { ComponentTypeConfig } from '../types/componentType';
-import type { LocationConfig } from '../types/location';
+import type { OperationalLocation } from '../types/location';
 
 interface ComponentsPageProps {
   onViewProvenance?: (componentID: string) => void;
@@ -157,12 +157,13 @@ function buildShipmentIdPreview(
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
 export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
-  const { role, fabricIdentity } = useAuth();
+  const { role, fabricIdentity, user } = useAuth();
 
   if (!role || !fabricIdentity) {
     throw new Error('ComponentsPage requires an operational user.');
   }
 
+  const actorLabel = user?.name?.trim() || ROLE_LABELS[role];
   const permissions = ROLE_PERMISSIONS[role];  const { addToast } = useToast();
   const search = useComponentSearch();
   const registration = useRegistration();
@@ -195,7 +196,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   const [componentTypes, setComponentTypes] = useState<ComponentTypeConfig[]>([]);
   const [componentTypesLoading, setComponentTypesLoading] = useState(false);
   const [componentTypesError, setComponentTypesError] = useState<string | null>(null);
-  const [locations, setLocations] = useState<LocationConfig[]>([]);
+  const [locations, setLocations] = useState<OperationalLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [activeAssembler, setActiveAssembler] = useState<OperationalAssembler | null>(null);
@@ -544,7 +545,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
         <div className="panel-header">
           <span className="panel-title">Role Actions</span>
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {fabricIdentity} · {role}
+            Authorized role: {ROLE_LABELS[role]}
           </span>
         </div>
 
@@ -610,14 +611,8 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                     </div>
                     <div>
                       <div className="tx-field-label">Actor</div>
-                      <div className="tx-field-value mono">{fabricIdentity}</div>
+                      <div className="tx-field-value">{actorLabel}</div>
                     </div>
-                    {action.result.txId && (
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <div className="tx-field-label">Transaction ID</div>
-                        <div className="tx-field-value mono" style={{ fontSize: 10, wordBreak: 'break-all' }}>{action.result.txId}</div>
-                      </div>
-                    )}
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-4)' }} onClick={action.reset}>
                     Perform Another Operation
@@ -644,7 +639,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                   </p>
                   {action.isUnauthorized && (
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                      Identity: {fabricIdentity} · Role: {role}
+                      Actor: {actorLabel} · Role: {ROLE_LABELS[role]}
                     </div>
                   )}
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: 'var(--space-3)' }} onClick={action.reset}>
@@ -877,7 +872,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       const generatedCertificateID = `CERT-${activeID}`;
 
                       openConfirm({
-                        title: 'Certify Component', componentID: activeID, actor: fabricIdentity,
+                        title: 'Certify Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'MANUFACTURED', toStatus: 'CERTIFIED',
                         fields: [
                           { label: 'Certificate ID', value: generatedCertificateID },
@@ -959,7 +954,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       );
 
                       openConfirm({
-                        title: 'Ship Component', componentID: activeID, actor: fabricIdentity,
+                        title: 'Ship Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
                         fields: [
                           { label: 'Component', value: search.component?.componentType || activeID },
@@ -979,7 +974,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="ship-trnsp" label="Transporter" value={fabricIdentity} onChange={() => {}} readOnly />
+                        <Field id="ship-trnsp" label="Transporter" value={actorLabel} onChange={() => {}} readOnly />
                         <div className="form-group">
                           <label className="form-label" htmlFor="ship-from">From Location <span className="form-required">*</span></label>
                           <select
@@ -995,7 +990,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </option>
                             {locations.map(location => (
                               <option key={location.id} value={location.id}>
-                                {location.name} · {location.code} · {location.pincode}
+                                {location.name}
                               </option>
                             ))}
                           </select>
@@ -1015,7 +1010,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </option>
                             {locations.map(location => (
                               <option key={location.id} value={location.id}>
-                                {location.name} · {location.code} · {location.pincode}
+                                {location.name}
                               </option>
                             ))}
                           </select>
@@ -1086,9 +1081,9 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       e.preventDefault();
                       if (!activeID) { addToast('Search for a component first', 'warning'); return; }
                       openConfirm({
-                        title: 'Receive Component', componentID: activeID, actor: fabricIdentity,
+                        title: 'Receive Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'SHIPPED', toStatus: 'RECEIVED',
-                        fields: [{ label: 'Warehouse', value: fabricIdentity }, { label: 'Location', value: recv.location }],
+                        fields: [{ label: 'Warehouse', value: actorLabel }, { label: 'Location', value: recv.location }],
                       }, () => action.execute(sig => receiveComponent(activeID, recv, sig))
                         .then(success => { if(success){handleSuccess(`Component ${activeID} received`);
                       }
@@ -1100,7 +1095,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="recv-wh" label="Warehouse" value={fabricIdentity} onChange={() => {}} readOnly />
+                        <Field id="recv-wh" label="Warehouse" value={actorLabel} onChange={() => {}} readOnly />
                         <Field id="recv-loc" label="Location" value={recv.location} onChange={v => setRecv(p => ({ ...p, location: v }))} placeholder="Mysuru" />
                         <Field id="recv-date" label="Received Date" type="date" value={recv.receivedDate} onChange={v => setRecv(p => ({ ...p, receivedDate: v }))} />
                       </div>
@@ -1124,11 +1119,11 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       }
 
                       openConfirm({
-                        title: 'Transfer Custody', componentID: activeID, actor: fabricIdentity,
+                        title: 'Transfer Custody', componentID: activeID, actor: actorLabel,
                         fromStatus: 'RECEIVED', toStatus: 'TRANSFERRED',
                         fields: [
-                          { label: 'From', value: fabricIdentity },
-                          { label: 'To Assembler', value: activeAssembler.name + ' (' + activeAssembler.fabricIdentity + ')' },
+                          { label: 'From', value: actorLabel },
+                          { label: 'To Assembler', value: activeAssembler.name },
                           { label: 'Location', value: transferLocation.name + ' (' + transferLocation.code + ')' },
                           { label: 'Transfer Date', value: xfr.transferDate },
                         ],
@@ -1142,7 +1137,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="xfr-from" label="From" value={fabricIdentity} onChange={() => {}} readOnly />
+                        <Field id="xfr-from" label="From" value={actorLabel} onChange={() => {}} readOnly />
                         <Field
                           id="xfr-to"
                           label="To Assembler"
@@ -1150,7 +1145,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             assemblerLoading
                               ? 'Loading assembler…'
                               : activeAssembler
-                                ? activeAssembler.name + ' (' + activeAssembler.fabricIdentity + ')'
+                                ? activeAssembler.name
                                 : ''
                           }
                           onChange={() => {}}
@@ -1174,7 +1169,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </option>
                             {locations.map(location => (
                               <option key={location.id} value={location.id}>
-                                {location.name} · {location.code} · {location.pincode}
+                                {location.name}
                               </option>
                             ))}
                           </select>
@@ -1263,7 +1258,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                       }
 
                       openConfirm({
-                        title: 'Assemble Component', componentID: activeID, actor: fabricIdentity,
+                        title: 'Assemble Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'TRANSFERRED', toStatus: 'ASSEMBLED',
                         fields: [
                           { label: 'Assembler', value: fabricIdentity },
@@ -1280,7 +1275,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                           <label className="form-label">Component ID</label>
                           <input className="form-input mono" value={activeID || searchInput} disabled placeholder="Search for a component above first" />
                         </div>
-                        <Field id="assy-asmblr" label="Assembler" value={fabricIdentity} onChange={() => {}} readOnly />
+                        <Field id="assy-asmblr" label="Assembler" value={actorLabel} onChange={() => {}} readOnly />
                         <div className="form-group full-width">
                           <label className="form-label" htmlFor="assy-id">Assembly ID</label>
                           <input
@@ -1316,7 +1311,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </option>
                             {locations.map(location => (
                               <option key={location.id} value={location.id}>
-                                {location.name} · {location.code} · {location.pincode}
+                                {location.name}
                               </option>
                             ))}
                           </select>
