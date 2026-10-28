@@ -764,10 +764,10 @@ const server = http.createServer(async (req, res) => {
       try {
         const health = await checkFabricConnection();
 
-        res.writeHead(
-          health.connected ? 200 : 503,
-          { 'Content-Type': 'application/json' }
-        );
+        // The endpoint itself is healthy when it can report Fabric status.
+        // Return HTTP 200 with connected:false so admins can still see configured
+        // endpoints and channel details while the Fabric network is offline.
+        res.writeHead(200, { 'Content-Type': 'application/json' });
 
         return res.end(JSON.stringify({
           connected: health.connected,
