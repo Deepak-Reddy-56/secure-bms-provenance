@@ -1,10 +1,10 @@
 import { api } from './api';
-import type { LocationConfig } from '../types/location';
+import type { LocationConfig, OperationalLocation } from '../types/location';
 
 export async function getLocations(
   signal?: AbortSignal
-): Promise<LocationConfig[]> {
-  const response = await api.get<{ locations: LocationConfig[] }>(
+): Promise<OperationalLocation[]> {
+  const response = await api.get<{ locations: OperationalLocation[] }>(
     '/api/locations',
     signal
   );
