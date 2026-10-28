@@ -9,14 +9,15 @@ interface OverviewPageProps {
 }
 
 export function OverviewPage({ onNavigate }: OverviewPageProps) {
-  const { role, fabricIdentity } = useAuth();
+  const { role } = useAuth();
 
-  if (!role || !fabricIdentity) {
+  if (!role) {
     throw new Error('OverviewPage requires an operational user.');
   }
 
   const permissions = ROLE_PERMISSIONS[role];
-  const roleLabel = ROLE_LABELS[role];  const overview = useSystemOverview();
+  const roleLabel = ROLE_LABELS[role];
+  const overview = useSystemOverview();
 
   useEffect(() => {
     overview.refresh();
@@ -38,7 +39,11 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
   const kpis = [
     { label: 'Registered Components', value: overview.loading ? null : overview.registeredCount, sub: 'on the Fabric ledger' },
     { label: 'Assigned Role', value: roleLabel, sub: 'Authorized workflow' },
-    { label: 'Fabric Identity', value: fabricIdentity, sub: 'Authenticated ledger identity', isMono: true },
+    {
+      label: 'Access Scope',
+      value: role === 'AUDITOR' ? 'Read-only' : 'Operational',
+      sub: 'Actions are restricted to your assigned role',
+    },
   ];
 
   return (
@@ -97,7 +102,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
           </div>
           <div className="panel-body">
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-6)' }}>
-              As <strong style={{ color: 'var(--text-primary)' }}>{fabricIdentity}</strong>, your primary workflow is component {action.label.toLowerCase()}.
+              As a <strong style={{ color: 'var(--text-primary)' }}>{roleLabel}</strong> user, your primary workflow is component {action.label.toLowerCase()}.
             </p>
             <button
               className="btn btn-primary btn-lg"
