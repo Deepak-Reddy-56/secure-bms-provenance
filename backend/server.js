@@ -474,6 +474,7 @@ function toOperationalProvenanceEvent(event) {
         transporter: 'Transporter',
         from: event.from,
         to: event.to,
+        shipmentID: event.shipmentID,
         shipmentDate: event.shipmentDate,
       };
 
@@ -1563,7 +1564,9 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({
           success: true,
           message: 'Component ' + id + ' shipped successfully',
-          component: toOperationalComponentView(updatedComponent)
+          component: toOperationalComponentView(updatedComponent),
+          shipmentID,
+          shipmentDate
         }));
 
       } catch (err) {
