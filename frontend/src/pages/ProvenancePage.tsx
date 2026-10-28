@@ -95,12 +95,6 @@ function EventCard({ event }: { event: ProvenanceEvent }) {
             ))}
           </div>
         )}
-        {expanded && event.txId && (
-          <div style={{ marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-subtle)' }}>
-            <div className="prov-event-field-label">Transaction ID</div>
-            <div className="prov-event-txid">{event.txId}</div>
-          </div>
-        )}
         <div style={{ marginTop: 'var(--space-2)', fontSize: 10, color: 'var(--text-placeholder)' }}>
           {expanded ? 'Click to collapse' : 'Click to expand'}
         </div>
