@@ -529,10 +529,9 @@ function cleanFabricError(err) {
     return msg;
   }
 
-  // This indicates that the running Fabric chaincode and backend were built
-  // from different lifecycle signatures.
+  // Do not expose backend/chaincode deployment details to operational accounts.
   if (/Expected \d+ parameters, but \d+ have been supplied/i.test(msg)) {
-    return 'Fabric chaincode is out of sync with the backend. Restart the backend and redeploy the current chaincode.';
+    return 'This lifecycle operation is temporarily unavailable. Contact the administrator.';
   }
 
   // Normalize common lifecycle messages
@@ -554,6 +553,14 @@ function cleanFabricError(err) {
 
   if (msg.includes('Unauthorized role')) {
     return 'Unauthorized role.';
+  }
+
+  // Low-level gateway/OS/network errors can include private paths and deployment
+  // diagnostics. Keep those details in server logs and show a safe client message.
+  if (
+    /endorsement failure|chaincode invocation failed|fabric peer connection failed|grpc|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|node:internal|spawn .*ENOENT|command not found|tls handshake|permission denied|no such file or directory|\/home\/[^ ]+\/fabric\//i.test(msg)
+  ) {
+    return 'The provenance service could not complete this request. Try again or contact the administrator.';
   }
 
   return msg || 'Operation failed.';
