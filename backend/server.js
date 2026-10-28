@@ -903,10 +903,11 @@ const server = http.createServer(async (req, res) => {
 
     // ── Authenticated location catalog ─────────────────────────────────
     if (req.method === 'GET' && pathname === '/api/locations') {
-      if (!hasOperationalAccess(session)) {
+      if (!['MANUFACTURER', 'TRANSPORTER', 'WAREHOUSE', 'ASSEMBLER']
+        .some(role => hasRole(session, role))) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          error: 'Operational role required.',
+          error: 'This role cannot access the operational location catalog.',
         }));
       }
 
@@ -951,10 +952,10 @@ const server = http.createServer(async (req, res) => {
 
     // ── Authenticated component type catalog ─────────────────────────────
     if (req.method === 'GET' && pathname === '/api/component-types') {
-      if (!hasOperationalAccess(session)) {
+      if (!hasRole(session, 'MANUFACTURER')) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          error: 'Operational role required.',
+          error: 'Manufacturer role required to access the component type catalog.',
         }));
       }
 
@@ -1787,8 +1788,12 @@ const server = http.createServer(async (req, res) => {
         const history = JSON.parse(historyStr);
         const normalizedHistory = normalizeProvenanceHistory(history);
 
+        // Standard operational provenance exposes lifecycle facts, not raw Fabric transaction IDs.
+        // Transaction evidence is available only through the auditor-scoped endpoint.
+        const provenanceForRole = normalizedHistory.map(({ txId, ...event }) => event);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(normalizedHistory));
+        return res.end(JSON.stringify(provenanceForRole));
       } catch (err) {
         const msg = cleanFabricError(err);
 
