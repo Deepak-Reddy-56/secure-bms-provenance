@@ -617,7 +617,6 @@ const server = http.createServer(async (req, res) => {
             picture: user.picture,
           },
           role: user.role,
-          fabricIdentity: user.fabricIdentity,
           isAdmin: user.isAdmin === true,
         }));
       } catch (err) {
@@ -703,7 +702,6 @@ const server = http.createServer(async (req, res) => {
           picture: session.picture,
         },
         role: session.role,
-        fabricIdentity: session.fabricIdentity,
         isAdmin: session.isAdmin === true,
       }));
     }
