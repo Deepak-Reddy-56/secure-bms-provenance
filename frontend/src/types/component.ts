@@ -7,14 +7,6 @@ export interface Component {
   manufactureDate: string;
   location: string;
   status: ComponentStatus;
-  /** Transaction ID returned by the backend after a successful registration */
-  txId?: string;
-  custodyTo?: string;
-  custodyLocation?: string;
-  transferDate?: string;
-  assembler?: string;
-  assemblyID?: string;
-  assemblyLocation?: string;
 }
 
 /** Full Day 2 lifecycle status union */
@@ -46,11 +38,7 @@ export interface ComponentVerificationResult {
     message: string;
   };
   typeConfiguration: {
-    id: string;
     name: string;
-    code: string;
-    componentNumber: string;
-    active: boolean;
   } | null;
   typeConfigurationStatus:
     | 'REGISTERED'
@@ -103,7 +91,6 @@ export interface AssembleComponentPayload {
 
 export interface LifecycleActionResult {
   component: Component;
-  txId?: string;
   message?: string;
 }
 
