@@ -903,7 +903,7 @@ const server = http.createServer(async (req, res) => {
 
     // ── Authenticated location catalog ─────────────────────────────────
     if (req.method === 'GET' && pathname === '/api/locations') {
-      if (!['MANUFACTURER', 'TRANSPORTER', 'WAREHOUSE', 'ASSEMBLER']
+      if (!['TRANSPORTER', 'WAREHOUSE', 'ASSEMBLER']
         .some(role => hasRole(session, role))) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
