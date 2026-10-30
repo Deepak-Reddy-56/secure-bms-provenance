@@ -102,9 +102,12 @@ const MAX_JSON_BODY_BYTES =
     ? configuredMaxJsonBodyBytes
     : 1_048_576;
 
+const DEFAULT_DEVELOPMENT_ORIGINS = IS_PRODUCTION
+  ? []
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
 const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  ...DEFAULT_DEVELOPMENT_ORIGINS,
   ...String(process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map(origin => origin.trim())
