@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const {
   createFixedWindowRateLimiter,
   getClientAddress,
-} = require('./security/rateLimiter');
+} = require('./rateLimiter');
 
 test('allows requests up to the configured limit', () => {
   const limiter = createFixedWindowRateLimiter({
