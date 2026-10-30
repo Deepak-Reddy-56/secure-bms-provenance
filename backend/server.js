@@ -11,6 +11,10 @@ const {
 
 require('dotenv').config();
 const http = require('http');
+const {
+  createFixedWindowRateLimiter,
+  getClientAddress,
+} = require('./security/rateLimiter');
 
 const {
   checkFabricConnection,
@@ -82,17 +86,50 @@ const ROLE_SCOPED_API_PREFIXES = [
 
 
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const COOKIE_SECURE =
+  IS_PRODUCTION || process.env.COOKIE_SECURE === 'true';
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES || 1_048_576);
+
+const ALLOWED_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...String(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean),
+]);
+
+const loginRateLimiter = createFixedWindowRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 10,
+  maxKeys: 10_000,
+});
 
 function setCorsHeaders(req, res) {
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ];
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=()'
+  );
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (IS_PRODUCTION && COOKIE_SECURE) {
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains'
+    );
+  }
 
   const origin = req.headers.origin;
+  const originAllowed = !origin || ALLOWED_ORIGINS.has(origin);
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && originAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -102,27 +139,77 @@ function setCorsHeaders(req, res) {
     'Access-Control-Allow-Methods',
     'GET, POST, PUT, DELETE, OPTIONS'
   );
-
   res.setHeader(
     'Access-Control-Allow-Headers',
     'Content-Type, Accept'
   );
+
+  return originAllowed;
+}
+
+function buildSessionCookie(token, maxAgeSeconds) {
+  const attributes = [
+    `session_token=${token}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+
+  if (COOKIE_SECURE) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
+}
+
+function createRequestError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
+    const contentLength = Number(req.headers['content-length'] || 0);
+    let receivedBytes = 0;
+    let tooLarge = contentLength > MAX_JSON_BODY_BYTES;
+    const chunks = [];
+
+    req.on('data', chunk => {
+      if (tooLarge) return;
+
+      receivedBytes += chunk.length;
+
+      if (receivedBytes > MAX_JSON_BODY_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
     req.on('end', () => {
-      const trimmed = body ? body.trim() : '';
+      if (tooLarge) {
+        return reject(createRequestError(
+          413,
+          'Request body exceeds the permitted size.'
+        ));
+      }
+
+      const body = Buffer.concat(chunks).toString('utf8');
+      const trimmed = body.trim();
+
       if (!trimmed) return resolve({});
+
       try {
         resolve(JSON.parse(trimmed));
-      } catch (err) {
-        console.error('JSON parse error on raw body:', JSON.stringify(body));
-        reject(new Error('Invalid JSON payload'));
+      } catch {
+        reject(createRequestError(400, 'Invalid JSON payload.'));
       }
     });
+
     req.on('error', reject);
   });
 }
@@ -568,11 +655,29 @@ function cleanFabricError(err) {
 }
 
 const server = http.createServer(async (req, res) => {
-  setCorsHeaders(req, res);
+  const originAllowed = setCorsHeaders(req, res);
+  const origin = req.headers.origin;
+
+  if (!originAllowed) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Request origin is not allowed.' }));
+  }
 
   if (req.method === 'OPTIONS') {
+    if (!origin) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'CORS origin is required.' }));
+    }
+
     res.writeHead(204);
     return res.end();
+  }
+
+  const isMutatingMethod = !['GET', 'HEAD'].includes(req.method);
+
+  if (IS_PRODUCTION && isMutatingMethod && !origin) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Request origin is required.' }));
   }
 
   const urlObj = new URL(req.url, `http://localhost:${PORT}`);
@@ -594,6 +699,18 @@ const server = http.createServer(async (req, res) => {
 
     // ── Google authentication ────────────────────────────────────────────
     if (req.method === 'POST' && pathname === '/api/auth/google') {
+      const rateLimit = loginRateLimiter.consume(
+        getClientAddress(req, TRUST_PROXY)
+      );
+
+      if (!rateLimit.allowed) {
+        res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Too many login attempts. Please try again later.',
+        }));
+      }
+
       try {
         const body = await parseJsonBody(req);
 
@@ -614,7 +731,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Set-Cookie':
-            `session_token=${sessionToken}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800`,
+            buildSessionCookie(sessionToken, 8 * 60 * 60),
         });
 
         return res.end(JSON.stringify({
@@ -628,6 +745,11 @@ const server = http.createServer(async (req, res) => {
           isAdmin: user.isAdmin === true,
         }));
       } catch (err) {
+        if (err.statusCode) {
+          res.writeHead(err.statusCode, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: err.message }));
+        }
+
         if (err.code === 'PROVISIONING_REQUIRED') {
           res.writeHead(403, {
             'Content-Type': 'application/json',
@@ -669,7 +791,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Set-Cookie':
-          'session_token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0',
+          buildSessionCookie('', 0),
       });
 
       return res.end(
@@ -884,7 +1006,7 @@ const server = http.createServer(async (req, res) => {
         );
 
         const msg = err.message || 'Admin user-management operation failed.';
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (
           msg.includes('already exists') ||
@@ -957,7 +1079,7 @@ const server = http.createServer(async (req, res) => {
         console.error('Admin component-type request failed:', err.message);
 
         const msg = err.message || 'Component type operation failed.';
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (
           msg.includes('already assigned') ||
@@ -1029,9 +1151,9 @@ const server = http.createServer(async (req, res) => {
         console.error('Admin location request failed:', err.message);
 
         const msg = err.message || 'Location operation failed.';
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
-        if (msg.includes('already assigned') || msg.includes('already exists')) {
+        if (!err.statusCode && (msg.includes('already assigned') || msg.includes('already exists'))) {
           code = 409;
         } else if (msg.includes('required') || msg.includes('must be')) {
           code = 400;
@@ -1477,7 +1599,7 @@ const server = http.createServer(async (req, res) => {
 
         const msg = cleanFabricError(err);
 
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (msg.includes('Unauthorized role')) {
           code = 403;
@@ -1578,7 +1700,7 @@ const server = http.createServer(async (req, res) => {
         console.error('Shipment failed:', err);
 
         const msg = cleanFabricError(err);
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (msg.includes('Unauthorized role')) {
           code = 403;
@@ -1642,7 +1764,7 @@ const server = http.createServer(async (req, res) => {
         console.error('Receipt failed:', err);
 
         const msg = cleanFabricError(err);
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (msg.includes('Unauthorized role')) {
           code = 403;
@@ -1742,7 +1864,7 @@ const server = http.createServer(async (req, res) => {
         console.error('Custody transfer failed:', err);
 
         const msg = cleanFabricError(err);
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (msg.includes('Unauthorized role')) {
           code = 403;
@@ -1839,7 +1961,7 @@ const server = http.createServer(async (req, res) => {
         console.error('Assembly failed:', err);
 
         const msg = cleanFabricError(err);
-        let code = 500;
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
 
         if (
           msg.includes('Unauthorized role') ||
@@ -1946,14 +2068,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
+    const statusCode = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: statusCode >= 500 ? 'Internal server error' : err.message }));
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`\n==================================================`);
-  console.log(` Provenance Backend API running on port ${PORT}`);
+  console.log(` Provenance Backend API running on ${HOST}:${PORT}`);
   console.log(` Health endpoint: http://localhost:${PORT}/api/health`);
   console.log(` Fabric health check: http://localhost:${PORT}/api/health/fabric`);
   console.log(`==================================================\n`);
