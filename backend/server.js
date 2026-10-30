@@ -256,7 +256,7 @@ function getActiveAssembler() {
   };
 }
 
-function getComponentTypeFromComponentId(componentID) {
+async function getComponentTypeFromComponentId(componentID) {
   const parsed = parseComponentId(componentID);
 
   if (!parsed || !parsed.validDate) {
@@ -265,7 +265,7 @@ function getComponentTypeFromComponentId(componentID) {
     );
   }
 
-  const typeConfig = findComponentTypeByCode(
+  const typeConfig = await findComponentTypeByCode(
     parsed.typeCode,
     { includeInactive: true }
   );
@@ -915,13 +915,13 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET' && pathname === '/api/admin/component-types') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({
-            componentTypes: listComponentTypes({ includeInactive: true }),
+            componentTypes: await listComponentTypes({ includeInactive: true }),
           }));
         }
 
         if (req.method === 'POST' && pathname === '/api/admin/component-types') {
           const body = await parseJsonBody(req);
-          const componentType = createComponentType({
+          const componentType = await createComponentType({
             name: body.name,
             code: body.code,
             componentNumber: body.componentNumber,
@@ -937,7 +937,7 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && match) {
           const body = await parseJsonBody(req);
-          const componentType = setComponentTypeStatus(
+          const componentType = await setComponentTypeStatus(
             decodeURIComponent(match[1]),
             body.active
           );
@@ -1103,7 +1103,7 @@ const server = http.createServer(async (req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          componentTypes: listComponentTypes({ includeInactive: false }),
+          componentTypes: await listComponentTypes({ includeInactive: false }),
         }));
       } catch (err) {
         console.error('Component type catalog read failed:', err);
@@ -1178,7 +1178,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       try {
-        const typeConfig = resolveComponentType(componentTypeId);
+        const typeConfig = await resolveComponentType(componentTypeId);
 
         if (!typeConfig) {
           res.writeHead(409, { 'Content-Type': 'application/json' });
@@ -1286,7 +1286,7 @@ const server = http.createServer(async (req, res) => {
         let typeConfigurationStatus = 'NOT_CHECKED';
 
         if (idFormat.valid && idFormat.parsed) {
-          typeConfiguration = findComponentTypeByCode(
+          typeConfiguration = await findComponentTypeByCode(
             idFormat.parsed.typeCode,
             { includeInactive: true }
           );
@@ -1517,7 +1517,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         const component = await getComponentFromLedger(id, identity);
-        const { typeConfig } = getComponentTypeFromComponentId(component.componentID);
+        const { typeConfig } = await getComponentTypeFromComponentId(component.componentID);
         const shipmentDate = body.shipmentDate || new Date().toISOString().split('T')[0];
 
         const shipmentID = buildShipmentId({
