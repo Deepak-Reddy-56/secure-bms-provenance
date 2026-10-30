@@ -11,7 +11,7 @@ export default defineConfig({
     // Proxy /api/* requests to the backend during development to avoid CORS
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || 'http://localhost:3000',
+        target: process.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
     },
