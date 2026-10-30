@@ -1,9 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+'use strict';
 
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const crypto = require('node:crypto');
+const { getDb } = require('./db/mongo');
 
 const VALID_ROLES = [
   'MANUFACTURER',
@@ -23,49 +21,17 @@ const ROLE_TO_FABRIC_IDENTITY = {
   AUDITOR: 'auditor1',
 };
 
-function ensureStore() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+function publicUser(document) {
+  if (!document) return null;
 
-  if (!fs.existsSync(USERS_FILE)) {
-    writeStore({ users: [] });
-  }
-}
-
-function readStore() {
-  ensureStore();
-
-  try {
-    const raw = fs.readFileSync(USERS_FILE, 'utf8');
-    const data = JSON.parse(raw);
-
-    if (!data || !Array.isArray(data.users)) {
-      throw new Error('Invalid users.json structure.');
-    }
-
-    return data;
-  } catch (err) {
-    throw new Error(`Unable to read user store: ${err.message}`);
-  }
-}
-
-function writeStore(data) {
-  const tempFile = `${USERS_FILE}.${process.pid}.tmp`;
-
-  fs.writeFileSync(
-    tempFile,
-    JSON.stringify(data, null, 2) + '\n',
-    'utf8'
-  );
-
-  fs.renameSync(tempFile, USERS_FILE);
+  const { _id, ...user } = document;
+  return user;
 }
 
 function normalizeEmail(email) {
-  if (typeof email !== 'string') {
-    return '';
-  }
-
-  return email.trim().toLowerCase();
+  return typeof email === 'string'
+    ? email.trim().toLowerCase()
+    : '';
 }
 
 function validateRole(role) {
@@ -76,17 +42,41 @@ function validateRole(role) {
   }
 }
 
-function ensureRoleAvailable(store, role, ignoredUserId = null) {
-  const assignedUser = store.users.find(
-    user => user.role === role && user.id !== ignoredUserId
-  );
+function translateDuplicateError(error) {
+  if (error?.code !== 11000) return error;
+
+  const field = Object.keys(error.keyPattern || {})[0];
+
+  if (field === 'email') {
+    return new Error('User with this email already exists.');
+  }
+
+  if (field === 'role' || field === 'fabricIdentity') {
+    return new Error('Role is already assigned to another user.');
+  }
+
+  if (field === 'googleSub') {
+    return new Error('This Google account is already linked to another user.');
+  }
+
+  return new Error('A user with these details already exists.');
+}
+
+async function ensureRoleAvailable(collection, role, ignoredUserId = null) {
+  const filter = { role };
+
+  if (ignoredUserId) {
+    filter.id = { $ne: ignoredUserId };
+  }
+
+  const assignedUser = await collection.findOne(filter);
 
   if (assignedUser) {
     throw new Error('Role is already assigned to another user.');
   }
 }
 
-function addUser({ email, name = '', role }) {
+async function addUser({ email, name = '', role }) {
   const normalizedEmail = normalizeEmail(email);
 
   if (!normalizedEmail) {
@@ -95,137 +85,159 @@ function addUser({ email, name = '', role }) {
 
   validateRole(role);
 
-  const store = readStore();
-
-  ensureRoleAvailable(store, role);
-
-  const existing = store.users.find(
-    user => user.email === normalizedEmail
-  );
-
-  if (existing) {
-    throw new Error('User with this email already exists.');
-  }
-
   const user = {
     id: crypto.randomUUID(),
     email: normalizedEmail,
-    name: String(name).trim(),
+    name: String(name || '').trim(),
     role,
     fabricIdentity: ROLE_TO_FABRIC_IDENTITY[role],
     googleSub: null,
     active: true,
   };
 
-  store.users.push(user);
-  writeStore(store);
+  const db = await getDb();
+  const collection = db.collection('users');
 
-  return user;
-}
+  try {
+    await ensureRoleAvailable(collection, role);
 
-function listUsers() {
-  return readStore().users;
-}
+    const existing = await collection.findOne({
+      email: normalizedEmail,
+    });
 
-function findUserById(id) {
-  if (!id) {
-    return null;
+    if (existing) {
+      throw new Error('User with this email already exists.');
+    }
+
+    await collection.insertOne(user);
+    return publicUser(user);
+  } catch (error) {
+    throw translateDuplicateError(error);
   }
-
-  return readStore().users.find(user => user.id === id) || null;
 }
 
-function findUserByEmail(email) {
-  const normalizedEmail = normalizeEmail(email);
+async function listUsers() {
+  const db = await getDb();
 
-  if (!normalizedEmail) {
-    return null;
-  }
+  const users = await db.collection('users')
+    .find({})
+    .toArray();
 
-  return (
-    readStore().users.find(
-      user => user.email === normalizedEmail
-    ) || null
+  return users.map(publicUser);
+}
+
+async function findUserById(id) {
+  if (!id) return null;
+
+  const db = await getDb();
+
+  return publicUser(
+    await db.collection('users').findOne({ id })
   );
 }
 
-function updateUserRole(id, role) {
-  validateRole(role);
+async function findUserByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
 
-  const store = readStore();
+  if (!normalizedEmail) return null;
 
-  const user = store.users.find(user => user.id === id);
+  const db = await getDb();
 
-  if (!user) {
-    throw new Error('User not found.');
-  }
-
-  ensureRoleAvailable(store, role, id);
-
-  user.role = role;
-  user.fabricIdentity = ROLE_TO_FABRIC_IDENTITY[role];
-
-  writeStore(store);
-
-  return user;
+  return publicUser(
+    await db.collection('users').findOne({
+      email: normalizedEmail,
+    })
+  );
 }
 
-function setUserActive(id, active) {
+async function updateUserRole(id, role) {
+  validateRole(role);
+
+  const db = await getDb();
+  const collection = db.collection('users');
+
+  try {
+    const existing = await collection.findOne({ id });
+
+    if (!existing) {
+      throw new Error('User not found.');
+    }
+
+    await ensureRoleAvailable(collection, role, id);
+
+    await collection.updateOne(
+      { id },
+      {
+        $set: {
+          role,
+          fabricIdentity: ROLE_TO_FABRIC_IDENTITY[role],
+        },
+      }
+    );
+
+    return publicUser(await collection.findOne({ id }));
+  } catch (error) {
+    throw translateDuplicateError(error);
+  }
+}
+
+async function setUserActive(id, active) {
   if (typeof active !== 'boolean') {
     throw new Error('Active status must be boolean.');
   }
 
-  const store = readStore();
+  const db = await getDb();
+  const collection = db.collection('users');
 
-  const user = store.users.find(user => user.id === id);
+  const result = await collection.updateOne(
+    { id },
+    { $set: { active } }
+  );
 
-  if (!user) {
+  if (result.matchedCount === 0) {
     throw new Error('User not found.');
   }
 
-  user.active = active;
-
-  writeStore(store);
-
-  return user;
+  return publicUser(await collection.findOne({ id }));
 }
 
-function updateGoogleSub(id, googleSub) {
+async function updateGoogleSub(id, googleSub) {
   if (!googleSub || typeof googleSub !== 'string') {
     throw new Error('Google subject is required.');
   }
 
-  const store = readStore();
+  const db = await getDb();
+  const collection = db.collection('users');
 
-  const user = store.users.find(user => user.id === id);
+  try {
+    const result = await collection.updateOne(
+      { id },
+      { $set: { googleSub } }
+    );
+
+    if (result.matchedCount === 0) {
+      throw new Error('User not found.');
+    }
+
+    return publicUser(await collection.findOne({ id }));
+  } catch (error) {
+    throw translateDuplicateError(error);
+  }
+}
+
+async function removeUser(id) {
+  const db = await getDb();
+  const collection = db.collection('users');
+
+  const user = await collection.findOne({ id });
 
   if (!user) {
     throw new Error('User not found.');
   }
 
-  user.googleSub = googleSub;
+  await collection.deleteOne({ id });
 
-  writeStore(store);
-
-  return user;
-}
-
-function removeUser(id) {
-  const store = readStore();
-
-  const index = store.users.findIndex(
-    user => user.id === id
-  );
-
-  if (index === -1) {
-    throw new Error('User not found.');
-  }
-
-  const [removedUser] = store.users.splice(index, 1);
-
-  writeStore(store);
-
-  return removedUser;
+  return publicUser(user);
 }
 
 module.exports = {
