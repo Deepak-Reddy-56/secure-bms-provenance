@@ -150,9 +150,9 @@ function parseCookies(req) {
   );
 }
 
-function getAuthenticatedSession(req) {
+async function getAuthenticatedSession(req) {
   const token = parseCookies(req).session_token;
-  const session = getSession(token);
+  const session = await getSession(token);
 
   if (!session) {
     return null;
@@ -163,18 +163,18 @@ function getAuthenticatedSession(req) {
   }
 
   if (!session.userId) {
-    deleteSession(token);
+    await deleteSession(token);
     return null;
   }
 
-  const user = findUserById(session.userId);
+  const user = await findUserById(session.userId);
 
   if (!user || !user.active) {
-    deleteSession(token);
+    await deleteSession(token);
     return null;
   }
 
-  const refreshed = updateSession(token, {
+  const refreshed = await updateSession(token, {
     ...user,
     sub: session.sub,
     picture: session.picture,
@@ -240,8 +240,8 @@ function getOperationalCurrentHolder(component) {
   }
 }
 
-function getActiveAssembler() {
-  const assembler = listUsers().find(
+async function getActiveAssembler() {
+  const assembler = (await listUsers()).find(
     user => user.role === 'ASSEMBLER' && user.active
   );
 
@@ -609,7 +609,7 @@ const server = http.createServer(async (req, res) => {
 
         const user = await authenticateGoogleToken(body.idToken);
 
-        const sessionToken = createSession(user);
+        const sessionToken = await createSession(user);
 
         res.writeHead(200, {
           'Content-Type': 'application/json',
@@ -664,7 +664,7 @@ const server = http.createServer(async (req, res) => {
     ) {
       const cookies = parseCookies(req);
 
-      deleteSession(cookies.session_token);
+      await deleteSession(cookies.session_token);
 
       res.writeHead(200, {
         'Content-Type': 'application/json',
@@ -685,7 +685,7 @@ const server = http.createServer(async (req, res) => {
       req.method === 'GET' &&
       pathname === '/api/auth/me'
     ) {
-      const authenticated = getAuthenticatedSession(req);
+      const authenticated = await getAuthenticatedSession(req);
       const session = authenticated?.session;
 
       if (!session) {
@@ -717,7 +717,7 @@ const server = http.createServer(async (req, res) => {
     
 
     // ── Protected API authentication ───────────────────────────────────
-    const authenticated = getAuthenticatedSession(req);
+    const authenticated = await getAuthenticatedSession(req);
     const session = authenticated?.session;
 
     if (!session) {
@@ -812,13 +812,13 @@ const server = http.createServer(async (req, res) => {
       try {
         if (req.method === 'GET' && pathname === '/api/admin/users') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ users: getUsers() }));
+          return res.end(JSON.stringify({ users: await getUsers() }));
         }
 
         if (req.method === 'POST' && pathname === '/api/admin/users') {
           const body = await parseJsonBody(req);
 
-          const user = createUser({
+          const user = await createUser({
             email: body.email,
             name: body.name,
             role: body.role,
@@ -841,7 +841,7 @@ const server = http.createServer(async (req, res) => {
         const action = match[2];
 
         if (req.method === 'GET' && !action) {
-          const user = getUser(userId);
+          const user = await getUser(userId);
 
           if (!user) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -854,7 +854,7 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && action === 'role') {
           const body = await parseJsonBody(req);
-          const user = changeUserRole(userId, body.role);
+          const user = await changeUserRole(userId, body.role);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ user }));
@@ -862,14 +862,14 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && action === 'status') {
           const body = await parseJsonBody(req);
-          const user = changeUserStatus(userId, body.active);
+          const user = await changeUserStatus(userId, body.active);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ user }));
         }
 
         if (req.method === 'DELETE' && !action) {
-          const user = deleteUser(userId);
+          const user = await deleteUser(userId);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ user }));
@@ -1076,7 +1076,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       try {
-        const assembler = getActiveAssembler();
+        const assembler = await getActiveAssembler();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
           assembler: assembler ? { name: assembler.name } : null,
@@ -1670,7 +1670,7 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
-        const assembler = getActiveAssembler();
+        const assembler = await getActiveAssembler();
 
         if (!assembler) {
           throw new Error(
