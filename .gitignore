@@ -11,3 +11,11 @@ log.txt
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local user records
+/backend/data/users.json
+
+# Local application data (never commit runtime records)
+/backend/data/users.json
+/backend/data/componentTypes.json
+/backend/data/locations.json

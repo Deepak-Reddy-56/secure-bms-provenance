@@ -62,8 +62,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
             {kpi.value === null ? (
               <span className="kpi-value muted">—</span>
             ) : (
-              <span className={`kpi-value${kpi.isMono ? ' mono' : ''}`}
-                style={kpi.isMono ? { fontSize: 'var(--text-lg)', fontWeight: 500 } : undefined}>
+              <span className="kpi-value">
                 {kpi.value}
               </span>
             )}

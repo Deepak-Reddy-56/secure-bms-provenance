@@ -561,22 +561,28 @@ class BMSContract extends Contract {
     /**
      * Retrieve the complete ledger history for a component.
      */
-        /**
-     * Retrieve the complete ledger history for a component.
-     */
+    async GetComponentHistory(ctx, componentID) {
+        if (!componentID) {
+            throw new Error('Component ID is required.');
+        }
 
-    /**
-     * Remove a known legacy/test component from Fabric world state.
-     *
-     * This is a maintenance-only transaction. It is intentionally not exposed
-     * through the application API or frontend.
-     *
-     * Security controls:
-     * - caller must be an Org1 Fabric administrator (hf.Type=admin);
-     * - caller must explicitly supply TEST_DATA_CLEANUP;
-     * - canonical component IDs can never be removed by this method;
-     * - only an existub.getHistoryForKey(componentID);
+        const callerRole =
+            ctx.clientIdentity.getAttributeValue('role');
 
+        const allowedRoles = [
+            'manufacturer',
+            'certifier',
+            'transporter',
+            'warehouse',
+            'assembler',
+            'auditor'
+        ];
+
+        if (!allowedRoles.includes(callerRole)) {
+            throw new Error('Unauthorized role.');
+        }
+
+        const iterator = await ctx.stub.getHistoryForKey(componentID);
         const history = [];
 
         try {
@@ -585,42 +591,35 @@ class BMSContract extends Contract {
 
                 if (result.value) {
                     const modification = result.value;
-
                     let data = null;
 
-                    if (!modification.isDelete &&
+                    if (
+                        !modification.isDelete &&
                         modification.value &&
-                        modification.value.length > 0) {
+                        modification.value.length > 0
+                    ) {
+                        const raw = modification.value.toString();
+
                         try {
-                            data = JSON.parse(
-                                modification.value.toString()
-                            );
+                            data = JSON.parse(raw);
                         } catch {
-                            data = modification.value.toString();
+                            data = raw;
                         }
                     }
 
                     const seconds =
-                        Number(
-                            modification.timestamp?.seconds ?? 0
-                        );
-
+                        Number(modification.timestamp?.seconds ?? 0);
                     const nanos =
-                        Number(
-                            modification.timestamp?.nanos ?? 0
-                        );
-
-                    const timestamp =
-                        new Date(
-                            seconds * 1000 +
-                            Math.floor(nanos / 1000000)
-                        ).toISOString();
+                        Number(modification.timestamp?.nanos ?? 0);
 
                     history.push({
                         txId: modification.txId,
-                        timestamp,
+                        timestamp: new Date(
+                            seconds * 1000 +
+                            Math.floor(nanos / 1000000)
+                        ).toISOString(),
                         isDelete: modification.isDelete,
-                        data,
+                        data
                     });
                 }
 
@@ -635,9 +634,6 @@ class BMSContract extends Contract {
         return JSON.stringify(history);
     }
 
-        /**
-     * Retrieve all components currently stored on the ledger.
-     */
     async GetAllComponents(ctx) {
         const iterator = await ctx.stub.getStateByRange('', '');
         const components = [];

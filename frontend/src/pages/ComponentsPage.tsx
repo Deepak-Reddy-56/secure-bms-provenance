@@ -133,27 +133,6 @@ function buildAssemblyIdPreview(componentID: string): string {
   return `ASSY-${typeCode}-${componentNumber}${datePart}${serial}`;
 }
 
-function buildShipmentIdPreview(
-  componentID: string,
-  shipmentDate: string,
-  fromCode: string,
-  toCode: string
-): string {
-  const match = componentID.trim().toUpperCase().match(/^BMS-([A-Z]{4})-(\\d{2})/);
-  if (!match || !shipmentDate || !fromCode || !toCode) {
-    return '';
-  }
-
-  const [, typeCode, componentNumber] = match;
-  const [year, month, day] = shipmentDate.split('-');
-  if (!year || !month || !day) {
-    return '';
-  }
-
-  return `SHIP-${typeCode}-${componentNumber}${day}${month}${year.slice(-2)}-${fromCode}-${toCode}`;
-}
-
-
 type ActionTab = 'register' | 'certify' | 'ship' | 'receive' | 'transfer' | 'assemble';
 
 export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
@@ -183,10 +162,6 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
   const today = new Date().toISOString().split('T')[0];
   const activeID = search.component?.componentID ?? '';
   const componentStatus = search.component?.status ?? '';
-  const assemblyPlace =
-    search.component?.assemblyLocation ||
-    search.component?.location ||
-    'the recorded assembly location';
 
   // Register form state
   const [reg, setReg] = useState<RegisterComponentPayload>({
@@ -952,22 +927,15 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                         return;
                       }
 
-                      const shipmentID = buildShipmentIdPreview(
-                        activeID,
-                        ship.shipmentDate,
-                        fromLocation.code,
-                        toLocation.code
-                      );
-
                       openConfirm({
                         title: 'Ship Component', componentID: activeID, actor: actorLabel,
                         fromStatus: 'CERTIFIED', toStatus: 'SHIPPED',
                         fields: [
                           { label: 'Component', value: search.component?.componentType || activeID },
-                          { label: 'Shipment ID', value: shipmentID },
-                          { label: 'From', value: fromLocation.name + ' (' + fromLocation.code + ')' },
-                          { label: 'To', value: toLocation.name + ' (' + toLocation.code + ')' },
+                          { label: 'From', value: fromLocation.name },
+                          { label: 'To', value: toLocation.name },
                           { label: 'Shipment Date', value: ship.shipmentDate },
+                          { label: 'Shipment Reference', value: 'Generated after successful dispatch' },
                         ],
                       }, () => action.execute(sig => shipComponent(activeID, ship, sig))
                         .then(success => {if(success){handleSuccess(`Component ${activeID} shipped`);
@@ -1027,19 +995,8 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             id="ship-sid"
                             type="text"
                             className="form-input mono"
-                            value={
-                              (() => {
-                                const fromLocation = locations.find(item => item.id === ship.fromLocationId);
-                                const toLocation = locations.find(item => item.id === ship.toLocationId);
-                                return buildShipmentIdPreview(
-                                  activeID,
-                                  ship.shipmentDate,
-                                  fromLocation?.code || '',
-                                  toLocation?.code || ''
-                                );
-                              })()
-                            }
-                            placeholder="Generated from component, route and shipment date"
+                            value=""
+                            placeholder="Generated after successful dispatch"
                             readOnly
                           />
                           <div style={{
@@ -1047,7 +1004,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             fontSize: 'var(--text-xs)',
                             color: 'var(--text-secondary)',
                           }}>
-                            Generated automatically. Format: SHIP-&#123;TYPE4&#125;-&#123;NUMBER2&#125;&#123;DDMMYY&#125;-&#123;FROM&#125;-&#123;TO&#125;.
+                            The backend generates the shipment reference after the transaction succeeds. It appears below in the transaction result.
                           </div>
                         </div>
                         <Field id="ship-date" label="Shipment Date" type="date" value={ship.shipmentDate} onChange={v => setShip(p => ({ ...p, shipmentDate: v }))} />
@@ -1130,7 +1087,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                         fields: [
                           { label: 'From', value: actorLabel },
                           { label: 'To Assembler', value: activeAssembler.name },
-                          { label: 'Location', value: transferLocation.name + ' (' + transferLocation.code + ')' },
+                          { label: 'Location', value: transferLocation.name },
                           { label: 'Transfer Date', value: xfr.transferDate },
                         ],
                       }, () => action.execute(sig => transferCustody(activeID, xfr, sig))
@@ -1212,9 +1169,9 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </div>
                             <div className="alert-message">
                               {componentStatus === 'ASSEMBLED'
-                                ? 'Component already assembled at ' + assemblyPlace + '.'
+                                ? 'Component is already assembled. View provenance for its assembly details.'
                                 : componentStatus === 'TRANSFERRED'
-                                  ? 'Custody has already been transferred to ' + (search.component?.custodyTo || 'the configured assembler') + '.'
+                                  ? 'Custody has already been transferred to ' + (activeAssembler?.name || 'the configured assembler') + '.'
                                   : 'Custody transfer is available only after warehouse receipt. Current status: ' + componentStatus + '.'}
                             </div>
                           </div>
@@ -1269,7 +1226,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                         fields: [
                           { label: 'Assembler', value: actorLabel },
                           { label: 'Assembly ID', value: assemblyID },
-                          { label: 'Location', value: assemblyLocation.name + ' (' + assemblyLocation.code + ')' },
+                          { label: 'Location', value: assemblyLocation.name },
                         ],
                       }, () => action.execute(sig => assembleComponent(activeID, assy, sig))
                         .then(success => {if(success) {handleSuccess(`Component ${activeID} assembled`);
@@ -1332,7 +1289,7 @@ export function ComponentsPage({ onViewProvenance }: ComponentsPageProps) {
                             </div>
                             <div className="alert-message">
                               {componentStatus === 'ASSEMBLED'
-                                ? 'Component is already assembled at ' + assemblyPlace + '.'
+                                ? 'Component is already assembled. View provenance for its assembly details.'
                                 : 'Assembly is available only after custody is transferred. Current status: ' + componentStatus + '.'}
                             </div>
                           </div>
