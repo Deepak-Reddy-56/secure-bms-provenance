@@ -1,3 +1,5 @@
+'use strict';
+
 const {
   listUsers,
   addUser,
@@ -9,11 +11,11 @@ const {
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
 
-function getUsers() {
+async function getUsers() {
   return listUsers();
 }
 
-function createUser({ email, name, role }) {
+async function createUser({ email, name, role }) {
   if (
     ADMIN_EMAIL &&
     typeof email === 'string' &&
@@ -29,19 +31,19 @@ function createUser({ email, name, role }) {
   });
 }
 
-function changeUserRole(id, role) {
+async function changeUserRole(id, role) {
   return updateUserRole(id, role);
 }
 
-function changeUserStatus(id, active) {
+async function changeUserStatus(id, active) {
   return setUserActive(id, active);
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
   return removeUser(id);
 }
 
-function getUser(id) {
+async function getUser(id) {
   return findUserById(id);
 }
 
