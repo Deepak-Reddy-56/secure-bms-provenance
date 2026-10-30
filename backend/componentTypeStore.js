@@ -33,7 +33,7 @@ function normalizeTypeCode(value) {
 function normalizeComponentNumber(value) {
   const number = String(value || '').trim();
 
-  if (!/^\\d{2}$/.test(number) || number === '00') {
+  if (!/^\d{2}$/.test(number) || number === '00') {
     throw new Error('Component number must be a unique two-digit value from 01 to 99.');
   }
 
