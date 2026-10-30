@@ -223,6 +223,20 @@ async function ensureCollectionsAndValidators(db) {
         createdAt: { bsonType: 'string' },
       },
     },
+
+    sessions: {
+      bsonType: 'object',
+      required: ['tokenHash', 'data', 'createdAt', 'expiresAt'],
+      properties: {
+        tokenHash: {
+          bsonType: 'string',
+          pattern: '^[a-f0-9]{64}$',
+        },
+        data: { bsonType: 'object' },
+        createdAt: { bsonType: 'date' },
+        expiresAt: { bsonType: 'date' },
+      },
+    },
   };
 
   for (const [name, schema] of Object.entries(definitions)) {
@@ -323,6 +337,19 @@ async function ensureIndexes(db) {
       unique: true,
     },
   ]);
+
+  await db.collection('sessions').createIndexes([
+    {
+      key: { tokenHash: 1 },
+      name: 'uniq_session_token_hash',
+      unique: true,
+    },
+    {
+      key: { expiresAt: 1 },
+      name: 'ttl_session_expiry',
+      expireAfterSeconds: 0,
+    },
+  ]);
 }
 
 async function importRecords(collection, records) {
@@ -389,7 +416,7 @@ async function main() {
 
   const db = await getDb();
 
-  const names = ['users', 'componentTypes', 'locations'];
+  const names = ['users', 'componentTypes', 'locations', 'sessions'];
 
   for (const name of names) {
     const count = await db.collection(name).countDocuments();
