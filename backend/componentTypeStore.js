@@ -1,45 +1,13 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
+const { getDb } = require('./db/mongo');
 
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'componentTypes.json');
+function publicRecord(document) {
+  if (!document) return null;
 
-function ensureStore() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, '[]\n', 'utf8');
-  }
-}
-
-function readStore() {
-  ensureStore();
-
-  try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8').trim();
-
-    // Recover the malformed seed used by an earlier build (literal "\\n").
-    if (raw === '[]\\n' || raw === '[]') {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    throw new Error(`Component type configuration is unreadable: ${err.message}`);
-  }
-}
-
-function writeStore(types) {
-  ensureStore();
-  fs.writeFileSync(
-    DATA_FILE,
-    `${JSON.stringify(types, null, 2)}\n`,
-    'utf8'
-  );
+  const { _id, nameKey, ...record } = document;
+  return record;
 }
 
 function normalizeName(value) {
@@ -65,131 +33,161 @@ function normalizeTypeCode(value) {
 function normalizeComponentNumber(value) {
   const number = String(value || '').trim();
 
-  if (!/^\d{2}$/.test(number) || number === '00') {
+  if (!/^\\d{2}$/.test(number) || number === '00') {
     throw new Error('Component number must be a unique two-digit value from 01 to 99.');
   }
 
   return number;
 }
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+function translateDuplicateError(error, values) {
+  if (error?.code !== 11000) return error;
+
+  const field = Object.keys(error.keyPattern || {})[0];
+
+  if (field === 'code') {
+    return new Error(`Component type code '${values.code}' is already assigned.`);
+  }
+
+  if (field === 'componentNumber') {
+    return new Error(`Component number '${values.componentNumber}' is already assigned.`);
+  }
+
+  if (field === 'nameKey') {
+    return new Error(`Component type '${values.name}' already exists.`);
+  }
+
+  return new Error('A component type with these details already exists.');
 }
 
-function listComponentTypes({ includeInactive = false } = {}) {
-  const types = readStore();
+async function listComponentTypes({ includeInactive = false } = {}) {
+  const db = await getDb();
+  const filter = includeInactive ? {} : { active: true };
 
-  return clone(
-    includeInactive ? types : types.filter(type => type.active)
+  const documents = await db.collection('componentTypes')
+    .find(filter)
+    .sort({ createdAt: 1 })
+    .toArray();
+
+  return documents.map(publicRecord);
+}
+
+async function getComponentType(id) {
+  const db = await getDb();
+
+  return publicRecord(
+    await db.collection('componentTypes').findOne({ id })
   );
 }
 
-function getComponentType(id) {
-  const value = readStore().find(type => type.id === id);
-  return value ? clone(value) : null;
+async function findComponentTypeById(
+  id,
+  { includeInactive = false } = {}
+) {
+  const db = await getDb();
+  const filter = { id };
+
+  if (!includeInactive) filter.active = true;
+
+  return publicRecord(
+    await db.collection('componentTypes').findOne(filter)
+  );
 }
 
-function findComponentTypeById(id, { includeInactive = false } = {}) {
-  const value = readStore().find(type => type.id === id);
-
-  if (!value || (!includeInactive && !value.active)) {
-    return null;
-  }
-
-  return clone(value);
-}
-
-function findComponentTypeByCode(code, { includeInactive = true } = {}) {
+async function findComponentTypeByCode(
+  code,
+  { includeInactive = true } = {}
+) {
   const normalized = String(code || '').trim().toUpperCase();
-  const value = readStore().find(type => type.code === normalized);
+  const filter = { code: normalized };
 
-  if (!value || (!includeInactive && !value.active)) {
-    return null;
-  }
+  if (!includeInactive) filter.active = true;
 
-  return clone(value);
-}
+  const db = await getDb();
 
-function findComponentTypeByName(name, { includeInactive = true } = {}) {
-  const normalized = String(name || '').trim().toLowerCase();
-  const value = readStore().find(
-    type => type.name.trim().toLowerCase() === normalized
+  return publicRecord(
+    await db.collection('componentTypes').findOne(filter)
   );
-
-  if (!value || (!includeInactive && !value.active)) {
-    return null;
-  }
-
-  return clone(value);
 }
 
-function createComponentType({ name, code, componentNumber }) {
+async function findComponentTypeByName(
+  name,
+  { includeInactive = true } = {}
+) {
+  const normalized = String(name || '').trim().toLowerCase();
+  const filter = { nameKey: normalized };
+
+  if (!includeInactive) filter.active = true;
+
+  const db = await getDb();
+
+  return publicRecord(
+    await db.collection('componentTypes').findOne(filter)
+  );
+}
+
+async function createComponentType({ name, code, componentNumber }) {
   const normalizedName = normalizeName(name);
   const normalizedCode = normalizeTypeCode(code);
   const normalizedComponentNumber = normalizeComponentNumber(componentNumber);
 
-  const types = readStore();
-
-  if (types.some(type => type.code === normalizedCode)) {
-    throw new Error(`Component type code '${normalizedCode}' is already assigned.`);
-  }
-
-  if (types.some(type => type.componentNumber === normalizedComponentNumber)) {
-    throw new Error(
-      `Component number '${normalizedComponentNumber}' is already assigned.`
-    );
-  }
-
-  if (
-    types.some(
-      type => type.name.trim().toLowerCase() === normalizedName.toLowerCase()
-    )
-  ) {
-    throw new Error(`Component type '${normalizedName}' already exists.`);
-  }
-
   const componentType = {
     id: crypto.randomUUID(),
     name: normalizedName,
+    nameKey: normalizedName.toLowerCase(),
     code: normalizedCode,
     componentNumber: normalizedComponentNumber,
     active: true,
     createdAt: new Date().toISOString(),
   };
 
-  types.push(componentType);
-  writeStore(types);
+  const db = await getDb();
 
-  return clone(componentType);
+  try {
+    await db.collection('componentTypes').insertOne(componentType);
+    return publicRecord(componentType);
+  } catch (error) {
+    throw translateDuplicateError(error, {
+      name: normalizedName,
+      code: normalizedCode,
+      componentNumber: normalizedComponentNumber,
+    });
+  }
 }
 
-function setComponentTypeStatus(id, active) {
+async function setComponentTypeStatus(id, active) {
   if (typeof active !== 'boolean') {
     throw new Error('Active status must be boolean.');
   }
 
-  const types = readStore();
-  const index = types.findIndex(type => type.id === id);
+  const db = await getDb();
+  const collection = db.collection('componentTypes');
 
-  if (index === -1) {
+  const result = await collection.updateOne(
+    { id },
+    { $set: { active } }
+  );
+
+  if (result.matchedCount === 0) {
     throw new Error('Component type not found.');
   }
 
-  types[index].active = active;
-  writeStore(types);
-
-  return clone(types[index]);
+  return publicRecord(await collection.findOne({ id }));
 }
 
-function resolveComponentType(value) {
-  if (!value) {
-    return null;
-  }
+async function resolveComponentType(value) {
+  if (!value) return null;
 
   return (
-    findComponentTypeById(String(value), { includeInactive: false }) ||
-    findComponentTypeByCode(String(value), { includeInactive: false }) ||
-    findComponentTypeByName(String(value), { includeInactive: false })
+    await findComponentTypeById(String(value), {
+      includeInactive: false,
+    }) ||
+    await findComponentTypeByCode(String(value), {
+      includeInactive: false,
+    }) ||
+    await findComponentTypeByName(String(value), {
+      includeInactive: false,
+    })
   );
 }
 
