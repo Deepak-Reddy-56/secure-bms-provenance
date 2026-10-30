@@ -92,7 +92,15 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const COOKIE_SECURE =
   IS_PRODUCTION || process.env.COOKIE_SECURE === 'true';
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
-const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES || 1_048_576);
+const configuredMaxJsonBodyBytes = Number(
+  process.env.MAX_JSON_BODY_BYTES || 1_048_576
+);
+const MAX_JSON_BODY_BYTES =
+  Number.isSafeInteger(configuredMaxJsonBodyBytes) &&
+  configuredMaxJsonBodyBytes > 0 &&
+  configuredMaxJsonBodyBytes <= 10 * 1024 * 1024
+    ? configuredMaxJsonBodyBytes
+    : 1_048_576;
 
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
@@ -122,7 +130,7 @@ function setCorsHeaders(req, res) {
   if (IS_PRODUCTION && COOKIE_SECURE) {
     res.setHeader(
       'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains'
+      'max-age=31536000'
     );
   }
 
