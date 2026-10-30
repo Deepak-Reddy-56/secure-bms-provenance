@@ -81,7 +81,7 @@ async function authenticateGoogleToken(idToken) {
     };
   }
 
-  const user = findUserByEmail(email);
+  const user = await findUserByEmail(email);
 
   if (!user || !user.active) {
     throw createProvisioningError(
@@ -92,7 +92,7 @@ async function authenticateGoogleToken(idToken) {
     );
   }
 
-  const linkedUser = listUsers().find(
+  const linkedUser = (await listUsers()).find(
     candidate => candidate.googleSub === payload.sub
   );
 
@@ -111,7 +111,7 @@ async function authenticateGoogleToken(idToken) {
   }
 
   if (!user.googleSub) {
-    updateGoogleSub(user.id, payload.sub);
+    await updateGoogleSub(user.id, payload.sub);
   }
 
   return {
