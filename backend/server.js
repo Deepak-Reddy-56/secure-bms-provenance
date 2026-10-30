@@ -886,7 +886,12 @@ const server = http.createServer(async (req, res) => {
         const msg = err.message || 'Admin user-management operation failed.';
         let code = 500;
 
-        if (msg.includes('already exists') || msg.includes('Invalid role')) {
+        if (
+          msg.includes('already exists') ||
+          msg.includes('already assigned') ||
+          msg.includes('already linked') ||
+          msg.includes('Invalid role')
+        ) {
           code = 409;
         } else if (msg.includes('not found')) {
           code = 404;
