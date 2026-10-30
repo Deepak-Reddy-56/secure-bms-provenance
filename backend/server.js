@@ -987,13 +987,13 @@ const server = http.createServer(async (req, res) => {
         if (req.method === 'GET' && pathname === '/api/admin/locations') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({
-            locations: listLocations({ includeInactive: true }),
+            locations: await listLocations({ includeInactive: true }),
           }));
         }
 
         if (req.method === 'POST' && pathname === '/api/admin/locations') {
           const body = await parseJsonBody(req);
-          const location = createLocation({
+          const location = await createLocation({
             name: body.name,
             code: body.code,
             pincode: body.pincode,
@@ -1009,7 +1009,7 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && match) {
           const body = await parseJsonBody(req);
-          const location = setLocationStatus(
+          const location = await setLocationStatus(
             decodeURIComponent(match[1]),
             body.active
           );
@@ -1052,7 +1052,7 @@ const server = http.createServer(async (req, res) => {
       try {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({
-          locations: listLocations({ includeInactive: false }).map(
+          locations: (await listLocations({ includeInactive: false })).map(
             ({ id, name }) => ({ id, name })
           ),
         }));
@@ -1505,8 +1505,8 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
-        const fromLocation = getLocation(body.fromLocationId, { includeInactive: false });
-        const toLocation = getLocation(body.toLocationId, { includeInactive: false });
+        const fromLocation = await getLocation(body.fromLocationId, { includeInactive: false });
+        const toLocation = await getLocation(body.toLocationId, { includeInactive: false });
 
         if (!fromLocation || !toLocation) {
           throw new Error('Origin and destination must be selected from active administrator-configured locations.');
@@ -1678,7 +1678,7 @@ const server = http.createServer(async (req, res) => {
           );
         }
 
-        const location = getLocation(body.locationId, {
+        const location = await getLocation(body.locationId, {
           includeInactive: false,
         });
 
@@ -1773,7 +1773,7 @@ const server = http.createServer(async (req, res) => {
       const body = await parseJsonBody(req);
 
       try {
-        const location = getLocation(body.locationId, {
+        const location = await getLocation(body.locationId, {
           includeInactive: false,
         });
 
