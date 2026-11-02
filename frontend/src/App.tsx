@@ -1,0 +1,206 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { AppShell } from './components/AppShell/AppShell';
+import type { Page } from './components/AppShell/AppShell';
+import { useNetworkStatus } from './hooks/useComponent';
+import { OverviewPage } from './pages/OverviewPage';
+import { ComponentsPage } from './pages/ComponentsPage';
+import { LifecyclePage } from './pages/LifecyclePage';
+import { ProvenancePage } from './pages/ProvenancePage';
+import { TransactionEvidencePage } from './pages/TransactionEvidencePage';
+import { AuditPage } from './pages/AuditPage';
+import { NetworkPage } from './pages/NetworkPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { LoginPage } from './pages/LoginPage';
+import type { UserRole } from './types/identity';
+
+const STANDARD_WORKFLOW_PAGES: Page[] = [
+  'overview',
+  'components',
+  'lifecycle',
+  'provenance',
+];
+
+const ROLE_PAGES: Record<UserRole, Page[]> = {
+  MANUFACTURER: STANDARD_WORKFLOW_PAGES,
+  CERTIFIER: STANDARD_WORKFLOW_PAGES,
+  TRANSPORTER: STANDARD_WORKFLOW_PAGES,
+  WAREHOUSE: STANDARD_WORKFLOW_PAGES,
+  ASSEMBLER: STANDARD_WORKFLOW_PAGES,
+  AUDITOR: [...STANDARD_WORKFLOW_PAGES, 'transaction-evidence', 'audit'],
+};
+
+const ADMIN_PAGES: Page[] = [
+  'admin-users',
+  'admin-component-types',
+  'admin-locations',
+  'network',
+];
+
+function canAccessPage(page: Page, role: UserRole | null, isAdmin: boolean): boolean {
+  if (isAdmin) {
+    return ADMIN_PAGES.includes(page);
+  }
+
+  return Boolean(role && ROLE_PAGES[role].includes(page));
+}
+
+const PAGE_TITLES: Record<Page, string> = {
+  overview: 'Component Provenance',
+  components: 'Component Verification',
+  lifecycle: 'Component Lifecycle',
+  provenance: 'Provenance History',
+  'transaction-evidence': 'Fabric Transaction Evidence',
+  audit: 'Audit Log',
+  network: 'Network Status',
+  'admin-users': 'User Management',
+  'admin-component-types': 'Component Types',
+  'admin-locations': 'Locations',
+};
+
+function AppInner() {
+  const { role, isAdmin, logout } = useAuth();
+  const defaultPage: Page = isAdmin ? 'admin-users' : 'overview';
+  const [currentPage, setCurrentPage] = useState<Page>(defaultPage);
+  const [provenanceComponentID, setProvenanceComponentID] = useState('');
+
+  const { status, health, refresh } = useNetworkStatus(isAdmin);
+
+  const navigate = (page: Page) => {
+    if (canAccessPage(page, role, isAdmin)) {
+      setCurrentPage(page);
+    }
+  };
+
+  const openProvenance = (componentID: string) => {
+    if (!canAccessPage('provenance', role, isAdmin)) {
+      return;
+    }
+
+    setProvenanceComponentID(componentID);
+    setCurrentPage('provenance');
+  };
+
+  useEffect(() => {
+    if (!canAccessPage(currentPage, role, isAdmin)) {
+      setCurrentPage(defaultPage);
+    }
+  }, [currentPage, role, isAdmin, defaultPage]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      void refresh();
+    }
+  }, [isAdmin, refresh]);
+
+  if (!isAdmin && !role) {
+    return (
+      <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <section style={{ maxWidth: 520, textAlign: 'center' }}>
+          <h1>Operational role unavailable</h1>
+          <p>
+            This account is authenticated, but it does not have a valid operational role.
+            Sign out and sign in again. If this continues, ask the administrator to verify this
+            account's provisioning.
+          </p>
+          <button className="btn btn-primary" type="button" onClick={() => void logout()}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'overview':
+        return (
+          <OverviewPage
+            onNavigate={navigate}
+          />
+        );
+
+      case 'components':
+        return <ComponentsPage onViewProvenance={openProvenance} />;
+
+      case 'lifecycle':
+        return <LifecyclePage />;
+
+      case 'provenance':
+        return <ProvenancePage initialComponentID={provenanceComponentID} />;
+
+      case 'transaction-evidence':
+        return <TransactionEvidencePage />;
+
+      case 'audit':
+        return <AuditPage />;
+
+      case 'network':
+        return (
+          <NetworkPage
+            networkStatus={status}
+            health={health}
+          />
+        );
+
+      case 'admin-users':
+        return <SettingsPage section="users" />;
+
+      case 'admin-component-types':
+        return <SettingsPage section="componentTypes" />;
+
+      case 'admin-locations':
+        return <SettingsPage section="locations" />;
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <AppShell
+      currentPage={currentPage}
+      onNavigate={navigate}
+      networkStatus={status}
+      pageTitle={PAGE_TITLES[currentPage]}
+    >
+      {renderPage()}
+    </AppShell>
+  );
+}
+
+function AuthGate() {
+  const {
+    authenticated,
+    loading,
+  } = useAuth();
+
+  if (loading) {
+    return (
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+      >
+        <p>Loading authentication...</p>
+      </main>
+    );
+  }
+
+  if (!authenticated) {
+    return <LoginPage />;
+  }
+
+  return <AppInner />;
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AuthGate />
+    </ToastProvider>
+  );
+}

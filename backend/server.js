@@ -1,0 +1,2094 @@
+const {
+  authenticateGoogleToken,
+} = require('./auth');
+
+const {
+  createSession,
+  getSession,
+  updateSession,
+  deleteSession,
+} = require('./sessionStore');
+
+require('dotenv').config();
+const http = require('http');
+const {
+  createFixedWindowRateLimiter,
+  getClientAddress,
+} = require('./security/rateLimiter');
+
+const {
+  checkFabricConnection,
+  createComponentOnLedger,
+  getComponentFromLedger,
+  invokeChaincode,
+  queryChaincode
+} = require('./fabricGateway');
+
+const {
+  getUsers,
+  createUser,
+  getUser,
+  changeUserRole,
+  changeUserStatus,
+  deleteUser,
+} = require('./userAdminService');
+
+const {
+  VALID_ROLES,
+  findUserById,
+  listUsers,
+} = require('./userStore');
+
+const {
+  listComponentTypes,
+  createComponentType,
+  setComponentTypeStatus,
+  resolveComponentType,
+  findComponentTypeByCode,
+} = require('./componentTypeStore');
+
+const {
+  listLocations,
+  getLocation,
+  createLocation,
+  setLocationStatus,
+} = require('./locationStore');
+
+const {
+  buildShipmentId,
+  validateShipmentId,
+} = require('./shipmentId');
+
+const {
+  buildComponentId,
+  parseComponentId,
+  validateComponentIdFormat,
+} = require('./componentId');
+
+const {
+  buildAssemblyId,
+} = require('./assemblyId');
+
+const {
+  validateProvenance,
+} = require('./provenanceValidator');
+
+const OPERATIONAL_ROLES = new Set(VALID_ROLES);
+
+const ROLE_SCOPED_API_PREFIXES = [
+  { prefix: '/api/manufacturer/', role: 'MANUFACTURER' },
+  { prefix: '/api/certifier/', role: 'CERTIFIER' },
+  { prefix: '/api/transporter/', role: 'TRANSPORTER' },
+  { prefix: '/api/warehouse/', role: 'WAREHOUSE' },
+  { prefix: '/api/assembler/', role: 'ASSEMBLER' },
+  { prefix: '/api/auditor/', role: 'AUDITOR' },
+];
+
+
+
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const COOKIE_SECURE =
+  IS_PRODUCTION || process.env.COOKIE_SECURE === 'true';
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+const configuredMaxJsonBodyBytes = Number(
+  process.env.MAX_JSON_BODY_BYTES || 1_048_576
+);
+const MAX_JSON_BODY_BYTES =
+  Number.isSafeInteger(configuredMaxJsonBodyBytes) &&
+  configuredMaxJsonBodyBytes > 0 &&
+  configuredMaxJsonBodyBytes <= 10 * 1024 * 1024
+    ? configuredMaxJsonBodyBytes
+    : 1_048_576;
+
+const DEFAULT_DEVELOPMENT_ORIGINS = IS_PRODUCTION
+  ? []
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+const ALLOWED_ORIGINS = new Set([
+  ...DEFAULT_DEVELOPMENT_ORIGINS,
+  ...String(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean),
+]);
+
+const loginRateLimiter = createFixedWindowRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 10,
+  maxKeys: 10_000,
+});
+
+function setCorsHeaders(req, res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=()'
+  );
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (IS_PRODUCTION && COOKIE_SECURE) {
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000'
+    );
+  }
+
+  const origin = req.headers.origin;
+  const originAllowed = !origin || ALLOWED_ORIGINS.has(origin);
+
+  if (origin && originAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, OPTIONS'
+  );
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Accept'
+  );
+
+  return originAllowed;
+}
+
+function buildSessionCookie(token, maxAgeSeconds) {
+  const attributes = [
+    `session_token=${token}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+
+  if (COOKIE_SECURE) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
+}
+
+function createRequestError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function parseJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const contentLength = Number(req.headers['content-length'] || 0);
+    let receivedBytes = 0;
+    let tooLarge = contentLength > MAX_JSON_BODY_BYTES;
+    const chunks = [];
+
+    req.on('data', chunk => {
+      if (tooLarge) return;
+
+      receivedBytes += chunk.length;
+
+      if (receivedBytes > MAX_JSON_BODY_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      if (tooLarge) {
+        return reject(createRequestError(
+          413,
+          'Request body exceeds the permitted size.'
+        ));
+      }
+
+      const body = Buffer.concat(chunks).toString('utf8');
+      const trimmed = body.trim();
+
+      if (!trimmed) return resolve({});
+
+      try {
+        resolve(JSON.parse(trimmed));
+      } catch {
+        reject(createRequestError(400, 'Invalid JSON payload.'));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function parseCookies(req) {
+  const cookieHeader = req.headers.cookie;
+
+  if (!cookieHeader) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    cookieHeader.split(';').map(cookie => {
+      const index = cookie.indexOf('=');
+
+      if (index === -1) {
+        return [cookie.trim(), ''];
+      }
+
+      const key = cookie.slice(0, index).trim();
+      const value = cookie.slice(index + 1).trim();
+
+      return [key, value];
+    })
+  );
+}
+
+async function getAuthenticatedSession(req) {
+  const token = parseCookies(req).session_token;
+  const session = await getSession(token);
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.isAdmin === true) {
+    return { token, session };
+  }
+
+  if (!session.userId) {
+    await deleteSession(token);
+    return null;
+  }
+
+  const user = await findUserById(session.userId);
+
+  if (!user || !user.active) {
+    await deleteSession(token);
+    return null;
+  }
+
+  const refreshed = await updateSession(token, {
+    ...user,
+    sub: session.sub,
+    picture: session.picture,
+    isAdmin: false,
+  });
+
+  return refreshed
+    ? { token, session: refreshed }
+    : null;
+}
+
+function hasOperationalAccess(session) {
+  return (
+    session.isAdmin !== true &&
+    OPERATIONAL_ROLES.has(session.role) &&
+    Boolean(session.fabricIdentity)
+  );
+}
+
+function hasRole(session, role) {
+  return hasOperationalAccess(session) && session.role === role;
+}
+
+function getFabricReadIdentity(session) {
+  return session.isAdmin === true ? 'auditor1' : session.fabricIdentity;
+}
+
+function getRequiredRoleForPath(pathname) {
+  return ROLE_SCOPED_API_PREFIXES.find(({ prefix }) =>
+    pathname.startsWith(prefix)
+  )?.role || null;
+}
+
+function toOperationalComponentView(component) {
+  if (!component || typeof component !== 'object') {
+    return null;
+  }
+
+  return {
+    componentID: component.componentID,
+    componentType: component.componentType,
+    manufacturer: component.manufacturer,
+    manufactureDate: component.manufactureDate,
+    location: component.location,
+    status: component.status,
+  };
+}
+
+function getOperationalCurrentHolder(component) {
+  switch (component?.status) {
+    case 'MANUFACTURED':
+    case 'CERTIFIED':
+      return component.manufacturer || 'Manufacturer';
+    case 'SHIPPED':
+      return 'Transporter';
+    case 'RECEIVED':
+      return 'Warehouse';
+    case 'TRANSFERRED':
+    case 'ASSEMBLED':
+      return 'Assembler';
+    default:
+      return null;
+  }
+}
+
+async function getActiveAssembler() {
+  const assembler = (await listUsers()).find(
+    user => user.role === 'ASSEMBLER' && user.active
+  );
+
+  if (!assembler) {
+    return null;
+  }
+
+  return {
+    id: assembler.id,
+    name: assembler.name,
+    fabricIdentity: assembler.fabricIdentity,
+  };
+}
+
+async function getComponentTypeFromComponentId(componentID) {
+  const parsed = parseComponentId(componentID);
+
+  if (!parsed || !parsed.validDate) {
+    throw new Error(
+      'Shipment ID generation requires a canonical BMS component ID.'
+    );
+  }
+
+  const typeConfig = await findComponentTypeByCode(
+    parsed.typeCode,
+    { includeInactive: true }
+  );
+
+  if (!typeConfig) {
+    throw new Error(
+      `Component type code '${parsed.typeCode}' is not registered.`
+    );
+  }
+
+  if (typeConfig.componentNumber !== parsed.componentNumber) {
+    throw new Error(
+      'Component ID type code and component number do not match the administrator registry.'
+    );
+  }
+
+  return {
+    parsed,
+    typeConfig,
+  };
+}
+
+async function getNextComponentSerial(typeConfig, manufactureDate, identity) {
+  const sampleId = buildComponentId({
+    typeCode: typeConfig.code,
+    componentNumber: typeConfig.componentNumber,
+    manufactureDate,
+    serialNumber: '001',
+  });
+  const parsedSample = parseComponentId(sampleId);
+
+  const output = await queryChaincode(
+    'GetAllComponents',
+    [],
+    identity
+  );
+
+  let components;
+  try {
+    components = JSON.parse(output);
+  } catch {
+    components = [];
+  }
+
+  let maxSerial = 0;
+
+  if (Array.isArray(components)) {
+    for (const component of components) {
+      const parsed = parseComponentId(component?.componentID);
+      if (
+        parsed &&
+        parsed.validDate &&
+        parsed.typeCode === typeConfig.code &&
+        parsed.componentNumber === typeConfig.componentNumber &&
+        parsed.datePart === parsedSample.datePart
+      ) {
+        maxSerial = Math.max(maxSerial, Number(parsed.serial));
+      }
+    }
+  }
+
+  const nextSerial = maxSerial + 1;
+
+  if (nextSerial > 999) {
+    throw new Error(
+      `No serial numbers remain for ${typeConfig.name} on ${manufactureDate}.`
+    );
+  }
+
+  return String(nextSerial).padStart(3, '0');
+}
+
+function normalizeProvenanceHistory(history) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+
+  return history
+    .filter(entry => entry && entry.data && !entry.isDelete)
+    .map(entry => {
+      const data = entry.data;
+      const status = data.status;
+
+      const base = {
+        eventType: status,
+        timestamp: entry.timestamp,
+        txId: entry.txId,
+        actor: 'Unknown',
+      };
+
+      switch (status) {
+        case 'MANUFACTURED':
+          return {
+            ...base,
+            eventType: 'MANUFACTURED',
+            actor: data.manufacturerActor || data.manufacturer || 'Unknown',
+            manufacturer: data.manufacturer || 'Unknown',
+            location: data.location || 'Unknown',
+          };
+
+        case 'CERTIFIED':
+          return {
+            ...base,
+            eventType: 'CERTIFIED',
+            actor: data.certifier || 'Unknown',
+            certificateID: data.certificateID || 'Unknown',
+            certificationDate: data.certificationDate || entry.timestamp,
+            complianceReference: data.complianceReference || 'Unknown',
+            location: data.location || 'Unknown',
+          };
+
+        case 'SHIPPED':
+          return {
+            ...base,
+            eventType: 'SHIPPED',
+            actor: data.transporter || 'Unknown',
+            transporter: data.transporter || 'Unknown',
+            from: data.from || 'Unknown',
+            fromCode: data.fromCode || 'Unknown',
+            fromPincode: data.fromPincode || 'Unknown',
+            to: data.to || 'Unknown',
+            toCode: data.toCode || 'Unknown',
+            toPincode: data.toPincode || 'Unknown',
+            shipmentID: data.shipmentID || 'Unknown',
+            shipmentDate: data.shipmentDate || entry.timestamp,
+          };
+
+        case 'RECEIVED':
+          return {
+            ...base,
+            eventType: 'RECEIVED',
+            actor: data.warehouse || 'Unknown',
+            warehouse: data.warehouse || 'Unknown',
+            location: data.receivedLocation || 'Unknown',
+            locationCode: data.receivedLocationCode || 'Unknown',
+            locationPincode: data.receivedLocationPincode || 'Unknown',
+            receivedDate: data.receiptDate || entry.timestamp,
+          };
+
+        case 'TRANSFERRED':
+          return {
+            ...base,
+            eventType: 'TRANSFERRED',
+            actor: data.custodyFrom || 'Unknown',
+            from: data.custodyFrom || 'Unknown',
+            to: data.custodyTo || 'Unknown',
+            location: data.custodyLocation || 'Unknown',
+            locationCode: data.custodyLocationCode || 'Unknown',
+            locationPincode: data.custodyLocationPincode || 'Unknown',
+            transferDate: data.transferDate || entry.timestamp,
+          };
+
+        case 'ASSEMBLED':
+          return {
+            ...base,
+            eventType: 'ASSEMBLED',
+            actor: data.assembler || 'Unknown',
+            assembler: data.assembler || 'Unknown',
+            assemblyID: data.assemblyID || 'Unknown',
+            location: data.assemblyLocation || 'Unknown',
+            locationCode: data.assemblyLocationCode || 'Unknown',
+            locationPincode: data.assemblyLocationPincode || 'Unknown',
+          };
+
+        default:
+          return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function toOperationalProvenanceEvent(event) {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+
+  const base = {
+    eventType: event.eventType,
+    timestamp: event.timestamp,
+  };
+
+  switch (event.eventType) {
+    case 'MANUFACTURED':
+      return {
+        ...base,
+        actor: 'Manufacturer',
+        manufacturer: event.manufacturer,
+        location: event.location,
+      };
+
+    case 'CERTIFIED':
+      return {
+        ...base,
+        actor: 'Certifier',
+        certificateID: event.certificateID,
+        certificationDate: event.certificationDate,
+        complianceReference: event.complianceReference,
+        location: event.location,
+      };
+
+    case 'SHIPPED':
+      return {
+        ...base,
+        actor: 'Transporter',
+        transporter: 'Transporter',
+        from: event.from,
+        to: event.to,
+        shipmentID: event.shipmentID,
+        shipmentDate: event.shipmentDate,
+      };
+
+    case 'RECEIVED':
+      return {
+        ...base,
+        actor: 'Warehouse',
+        warehouse: 'Warehouse',
+        location: event.location,
+        receivedDate: event.receivedDate,
+      };
+
+    case 'TRANSFERRED':
+      return {
+        ...base,
+        actor: 'Warehouse',
+        from: 'Warehouse',
+        to: 'Assembler',
+        location: event.location,
+        transferDate: event.transferDate,
+      };
+
+    case 'ASSEMBLED':
+      return {
+        ...base,
+        actor: 'Assembler',
+        assembler: 'Assembler',
+        assemblyID: event.assemblyID,
+        location: event.location,
+      };
+
+    default:
+      return null;
+  }
+}
+
+function cleanFabricError(err) {
+  let msg = err?.message || String(err);
+
+  // Fabric Gateway often wraps the chaincode error like:
+  // Error: endorsement failure ... message:"Unauthorized role."
+  const fabricMessage = msg.match(/message:"([^"]+)"/);
+
+  if (fabricMessage) {
+    msg = fabricMessage[1];
+  }
+
+  // Remove a redundant leading "Error:"
+  msg = msg.replace(/^Error:\s*/, '').trim();
+
+  // Preserve location-aware assembly messages from lifecycle prevalidation.
+  if (msg.includes('already assembled at ')) {
+    return msg;
+  }
+
+  // Do not expose backend/chaincode deployment details to operational accounts.
+  if (/Expected \d+ parameters, but \d+ have been supplied/i.test(msg)) {
+    return 'This lifecycle operation is temporarily unavailable. Contact the administrator.';
+  }
+
+  // Normalize common lifecycle messages
+  if (msg.includes('already assembled')) {
+    return 'Component already assembled.';
+  }
+
+  if (msg.includes('already certified')) {
+    return 'Component already certified.';
+  }
+
+  if (msg.includes('already exists')) {
+    return 'Component already exists.';
+  }
+
+  if (msg.includes('not found')) {
+    return 'Component not found.';
+  }
+
+  if (msg.includes('Unauthorized role')) {
+    return 'Unauthorized role.';
+  }
+
+  // Low-level gateway/OS/network errors can include private paths and deployment
+  // diagnostics. Keep those details in server logs and show a safe client message.
+  if (
+    /endorsement failure|chaincode invocation failed|fabric peer connection failed|grpc|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|node:internal|spawn .*ENOENT|command not found|tls handshake|permission denied|no such file or directory|\/home\/[^ ]+\/fabric\//i.test(msg)
+  ) {
+    return 'The provenance service could not complete this request. Try again or contact the administrator.';
+  }
+
+  return msg || 'Operation failed.';
+}
+
+const server = http.createServer(async (req, res) => {
+  const originAllowed = setCorsHeaders(req, res);
+  const origin = req.headers.origin;
+
+  if (!originAllowed) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Request origin is not allowed.' }));
+  }
+
+  if (req.method === 'OPTIONS') {
+    if (!origin) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'CORS origin is required.' }));
+    }
+
+    res.writeHead(204);
+    return res.end();
+  }
+
+  const isMutatingMethod = !['GET', 'HEAD'].includes(req.method);
+
+  if (IS_PRODUCTION && isMutatingMethod && !origin) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Request origin is required.' }));
+  }
+
+  const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = urlObj.pathname;
+
+  try {
+    // ── 1. GET /api/health ──────────────────────────────────────────────
+    // Public endpoint used for basic service health.
+    if (req.method === 'GET' && pathname === '/api/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        status: 'OK',
+        service: 'bms-provenance-backend',
+        timestamp: new Date().toISOString()
+      }));
+    }
+
+    // Fabric health is administrator-only and is handled after session authentication.
+
+    // ── Google authentication ────────────────────────────────────────────
+    if (req.method === 'POST' && pathname === '/api/auth/google') {
+      const rateLimit = loginRateLimiter.consume(
+        getClientAddress(req, TRUST_PROXY)
+      );
+
+      if (!rateLimit.allowed) {
+        res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Too many login attempts. Please try again later.',
+        }));
+      }
+
+      try {
+        const body = await parseJsonBody(req);
+
+        if (!body.idToken) {
+          res.writeHead(400, {
+            'Content-Type': 'application/json',
+          });
+
+          return res.end(JSON.stringify({
+            error: 'Google ID token is required.',
+          }));
+        }
+
+        const user = await authenticateGoogleToken(body.idToken);
+
+        const sessionToken = await createSession(user);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie':
+            buildSessionCookie(sessionToken, 8 * 60 * 60),
+        });
+
+        return res.end(JSON.stringify({
+          authenticated: true,
+          user: {
+            email: user.email,
+            name: user.name,
+            picture: user.picture,
+          },
+          role: user.role,
+          isAdmin: user.isAdmin === true,
+        }));
+      } catch (err) {
+        if (err.statusCode) {
+          res.writeHead(err.statusCode, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: err.message }));
+        }
+
+        if (err.code === 'PROVISIONING_REQUIRED') {
+          res.writeHead(403, {
+            'Content-Type': 'application/json',
+          });
+
+          return res.end(JSON.stringify({
+            error: err.message,
+            provisioningRequired: true,
+            sub: err.sub,
+            email: err.email,
+            name: err.name,
+          }));
+        }
+
+        console.error(
+          'Google authentication failed:',
+          err.message
+        );
+
+        res.writeHead(401, {
+          'Content-Type': 'application/json',
+        });
+
+        return res.end(JSON.stringify({
+          error: err.message || 'Google authentication failed.',
+        }));
+      }
+    }
+
+    // ── Logout ──────────────────────────────────────────────────────────
+    if (
+      req.method === 'POST' &&
+      pathname === '/api/auth/logout'
+    ) {
+      const cookies = parseCookies(req);
+
+      await deleteSession(cookies.session_token);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie':
+          buildSessionCookie('', 0),
+      });
+
+      return res.end(
+        JSON.stringify({
+          authenticated: false,
+        })
+      );
+    }
+
+
+    // ── Current authenticated user ──────────────────────────────────────
+    if (
+      req.method === 'GET' &&
+      pathname === '/api/auth/me'
+    ) {
+      const authenticated = await getAuthenticatedSession(req);
+      const session = authenticated?.session;
+
+      if (!session) {
+        res.writeHead(401, {
+          'Content-Type': 'application/json',
+        });
+
+        return res.end(JSON.stringify({
+          authenticated: false,
+        }));
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        authenticated: true,
+        user: {
+          email: session.email,
+          name: session.name,
+          picture: session.picture,
+        },
+        role: session.role,
+        isAdmin: session.isAdmin === true,
+      }));
+    }
+
+    
+
+    // ── Protected API authentication ───────────────────────────────────
+    const authenticated = await getAuthenticatedSession(req);
+    const session = authenticated?.session;
+
+    if (!session) {
+      res.writeHead(401, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        error: 'Authentication required.',
+      }));
+    }
+
+    const identity = session.fabricIdentity;
+
+    if (
+      session.isAdmin === true &&
+      !pathname.startsWith('/api/admin/') &&
+      pathname !== '/api/health/fabric'
+    ) {
+      res.writeHead(403, {
+        'Content-Type': 'application/json',
+      });
+
+      return res.end(JSON.stringify({
+        error: 'Administrator account cannot perform operational Fabric actions.',
+      }));
+    }
+
+    if (pathname.startsWith('/api/admin/') && session.isAdmin !== true) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: 'Administrator access required.',
+      }));
+    }
+
+    const requiredRole = getRequiredRoleForPath(pathname);
+    if (requiredRole && !hasRole(session, requiredRole)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        error: `This endpoint requires the ${requiredRole} role.`,
+      }));
+    }
+
+    if (req.method === 'GET' && pathname === '/api/health/fabric') {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        const health = await checkFabricConnection();
+
+        // The endpoint itself is healthy when it can report Fabric status.
+        // Return HTTP 200 with connected:false so admins can still see configured
+        // endpoints and channel details while the Fabric network is offline.
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          connected: health.connected,
+          network: health.network,
+          chaincode: health.chaincode,
+          details: health.details,
+          error: health.connected ? undefined : health.error,
+        }));
+      } catch (err) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          connected: false,
+          error: cleanFabricError(err)
+        }));
+      }
+    }
+
+    console.log(
+      `[${new Date().toISOString()}] ${req.method} ${pathname} ` +
+      `(Fabric Identity: ${identity})`
+    );
+
+
+    // ── Admin user and role management ─────────────────────────────────
+    if (pathname.startsWith('/api/admin/users')) {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        if (req.method === 'GET' && pathname === '/api/admin/users') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ users: await getUsers() }));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/admin/users') {
+          const body = await parseJsonBody(req);
+
+          const user = await createUser({
+            email: body.email,
+            name: body.name,
+            role: body.role,
+          });
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        const match = pathname.match(
+          /^\/api\/admin\/users\/([^/]+)(?:\/(role|status))?$/
+        );
+
+        if (!match) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Endpoint not found' }));
+        }
+
+        const userId = decodeURIComponent(match[1]);
+        const action = match[2];
+
+        if (req.method === 'GET' && !action) {
+          const user = await getUser(userId);
+
+          if (!user) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: 'User not found.' }));
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'PUT' && action === 'role') {
+          const body = await parseJsonBody(req);
+          const user = await changeUserRole(userId, body.role);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'PUT' && action === 'status') {
+          const body = await parseJsonBody(req);
+          const user = await changeUserStatus(userId, body.active);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        if (req.method === 'DELETE' && !action) {
+          const user = await deleteUser(userId);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ user }));
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+      } catch (err) {
+        console.error(
+          'Admin user-management request failed:',
+          err.message
+        );
+
+        const msg = err.message || 'Admin user-management operation failed.';
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (
+          msg.includes('already exists') ||
+          msg.includes('already assigned') ||
+          msg.includes('already linked') ||
+          msg.includes('Invalid role')
+        ) {
+          code = 409;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('Email is required') ||
+          msg.includes('Active status must be boolean')
+        ) {
+          code = 400;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Admin component type configuration ───────────────────────────────
+    if (pathname.startsWith('/api/admin/component-types')) {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        if (req.method === 'GET' && pathname === '/api/admin/component-types') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            componentTypes: await listComponentTypes({ includeInactive: true }),
+          }));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/admin/component-types') {
+          const body = await parseJsonBody(req);
+          const componentType = await createComponentType({
+            name: body.name,
+            code: body.code,
+            componentNumber: body.componentNumber,
+          });
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ componentType }));
+        }
+
+        const match = pathname.match(
+          /^\/api\/admin\/component-types\/([^/]+)\/status$/
+        );
+
+        if (req.method === 'PUT' && match) {
+          const body = await parseJsonBody(req);
+          const componentType = await setComponentTypeStatus(
+            decodeURIComponent(match[1]),
+            body.active
+          );
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ componentType }));
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+      } catch (err) {
+        console.error('Admin component-type request failed:', err.message);
+
+        const msg = err.message || 'Component type operation failed.';
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (
+          msg.includes('already assigned') ||
+          msg.includes('already exists')
+        ) {
+          code = 409;
+        } else if (
+          msg.includes('must be') ||
+          msg.includes('required') ||
+          msg.includes('Active status must')
+        ) {
+          code = 400;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Admin location registry ───────────────────────────────────────────
+    if (pathname.startsWith('/api/admin/locations')) {
+      if (session.isAdmin !== true) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Administrator access required.',
+        }));
+      }
+
+      try {
+        if (req.method === 'GET' && pathname === '/api/admin/locations') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            locations: await listLocations({ includeInactive: true }),
+          }));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/admin/locations') {
+          const body = await parseJsonBody(req);
+          const location = await createLocation({
+            name: body.name,
+            code: body.code,
+            pincode: body.pincode,
+          });
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ location }));
+        }
+
+        const match = pathname.match(
+          /^\/api\/admin\/locations\/([^/]+)\/status$/
+        );
+
+        if (req.method === 'PUT' && match) {
+          const body = await parseJsonBody(req);
+          const location = await setLocationStatus(
+            decodeURIComponent(match[1]),
+            body.active
+          );
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ location }));
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
+      } catch (err) {
+        console.error('Admin location request failed:', err.message);
+
+        const msg = err.message || 'Location operation failed.';
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (!err.statusCode && (msg.includes('already assigned') || msg.includes('already exists'))) {
+          code = 409;
+        } else if (msg.includes('required') || msg.includes('must be')) {
+          code = 400;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Authenticated location catalog ─────────────────────────────────
+    if (req.method === 'GET' && pathname === '/api/locations') {
+      if (!['TRANSPORTER', 'WAREHOUSE', 'ASSEMBLER']
+        .some(role => hasRole(session, role))) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'This role cannot access the operational location catalog.',
+        }));
+      }
+
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          locations: (await listLocations({ includeInactive: false })).map(
+            ({ id, name }) => ({ id, name })
+          ),
+        }));
+      } catch (err) {
+        console.error('Location catalog read failed:', err.message);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Location configuration is unavailable.',
+        }));
+      }
+    }
+
+    // ── Warehouse assembler assignment catalog ───────────────────────────
+    if (req.method === 'GET' && pathname === '/api/warehouse/assembler') {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
+
+      try {
+        const assembler = await getActiveAssembler();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          assembler: assembler ? { name: assembler.name } : null,
+        }));
+      } catch (err) {
+        console.error('Assembler assignment read failed:', err.message);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Assembler configuration is unavailable.',
+        }));
+      }
+    }
+
+    // ── Authenticated component type catalog ─────────────────────────────
+    if (req.method === 'GET' && pathname === '/api/component-types') {
+      if (!hasRole(session, 'MANUFACTURER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Manufacturer role required to access the component type catalog.',
+        }));
+      }
+
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          componentTypes: await listComponentTypes({ includeInactive: false }),
+        }));
+      } catch (err) {
+        console.error('Component type catalog read failed:', err);
+
+        if (!res.headersSent) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+        }
+
+        return res.end(JSON.stringify({
+          error: 'Component type configuration is unavailable.',
+        }));
+      }
+    }
+
+    // ── 3. GET /api/overview ───────────────────────────────────────────
+    if (req.method === 'GET' && pathname === '/api/overview') {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+      try {
+        const componentsOutput = await queryChaincode(
+          'GetAllComponents',
+          [],
+          identity
+        );
+
+        const components = JSON.parse(componentsOutput);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          registeredCount: Array.isArray(components) ? components.length : 0,
+        }));
+      } catch (err) {
+        console.error('Overview query failed:', err);
+
+        const msg = cleanFabricError(err);
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    // ── 4. POST /api/manufacturer/components - Register Component ───────
+    if (req.method === 'POST' && pathname === '/api/manufacturer/components') {
+      if (!hasRole(session, 'MANUFACTURER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Manufacturer role required.',
+        }));
+      }
+
+      const body = await parseJsonBody(req);
+      const {
+        componentTypeId,
+        manufacturer,
+        manufactureDate,
+        location,
+      } = body;
+
+      if (!componentTypeId || !manufacturer || !manufactureDate || !location) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'All fields are required: componentTypeId, manufacturer, manufactureDate, location',
+        }));
+      }
+
+      try {
+        const typeConfig = await resolveComponentType(componentTypeId);
+
+        if (!typeConfig) {
+          res.writeHead(409, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            error: 'Selected component type is unavailable. Ask an administrator to activate it.',
+          }));
+        }
+
+        const serialNumber = await getNextComponentSerial(
+          typeConfig,
+          manufactureDate,
+          identity
+        );
+
+        const componentID = buildComponentId({
+          typeCode: typeConfig.code,
+          componentNumber: typeConfig.componentNumber,
+          manufactureDate,
+          serialNumber,
+        });
+
+        const result = await createComponentOnLedger({
+          componentID,
+          componentType: typeConfig.name,
+          manufacturer: manufacturer.trim(),
+          manufactureDate,
+          location: location.trim(),
+        }, identity);
+
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(
+          toOperationalComponentView(result)
+        ));
+      } catch (err) {
+        console.error('Error creating component:', err);
+        const msg = cleanFabricError(err);
+        const code = (
+          msg.includes('already exists') ||
+          msg.includes('unavailable') ||
+          msg.includes('serial numbers remain')
+        ) ? 409 : 400;
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Component Verification ───────────────────────────────────────────
+    if (
+      req.method === 'GET' &&
+      pathname.match(/^\/api\/components\/[^/]+\/verify$/)
+    ) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+
+      const match = pathname.match(/^\/api\/components\/([^/]+)\/verify$/);
+      const id = decodeURIComponent(match[1]).trim().toUpperCase();
+
+      if (!id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Component ID is required.',
+        }));
+      }
+
+      const idFormat = validateComponentIdFormat(id);
+      const readIdentity = getFabricReadIdentity(session);
+
+      try {
+        const component = await getComponentFromLedger(id, readIdentity);
+
+        let provenanceAvailable = false;
+        let provenanceEventCount = 0;
+        let provenanceStatus = 'PROVENANCE UNAVAILABLE';
+        let provenanceCondition = 'UNAVAILABLE';
+
+        try {
+          const historyStr = await queryChaincode(
+            'GetComponentHistory',
+            [id],
+            readIdentity
+          );
+          const history = JSON.parse(historyStr);
+          const normalizedHistory = normalizeProvenanceHistory(history);
+          provenanceEventCount = normalizedHistory.length;
+          provenanceAvailable = provenanceEventCount > 0;
+
+          if (provenanceAvailable) {
+            const provenanceValidation = validateProvenance(normalizedHistory);
+            provenanceStatus = provenanceValidation.status;
+            provenanceCondition = provenanceValidation.condition;
+          }
+        } catch (historyError) {
+          console.warn(
+            `Verification history lookup failed for ${id}:`,
+            historyError.message
+          );
+        }
+
+        let typeConfiguration = null;
+        let typeConfigurationStatus = 'NOT_CHECKED';
+
+        if (idFormat.valid && idFormat.parsed) {
+          typeConfiguration = await findComponentTypeByCode(
+            idFormat.parsed.typeCode,
+            { includeInactive: true }
+          );
+          typeConfigurationStatus = typeConfiguration
+            ? 'REGISTERED'
+            : 'UNKNOWN_TYPE_CODE';
+
+          if (
+            typeConfiguration &&
+            typeConfiguration.componentNumber !== idFormat.parsed.componentNumber
+          ) {
+            typeConfigurationStatus = 'TYPE_NUMBER_MISMATCH';
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          verified: true,
+          verificationStatus: 'COMPONENT VERIFIED',
+          component: toOperationalComponentView(component),
+          idFormat: {
+            valid: idFormat.valid,
+            status: idFormat.status,
+            message: idFormat.message,
+          },
+          typeConfiguration: typeConfiguration
+            ? { name: typeConfiguration.name }
+            : null,
+          typeConfigurationStatus,
+          currentHolder: getOperationalCurrentHolder(component),
+          provenanceAvailable,
+          provenanceEventCount,
+          provenanceStatus,
+          provenanceCondition,
+        }));
+      } catch (err) {
+        const msg = cleanFabricError(err);
+
+        if (msg.includes('not found')) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            verified: false,
+            verificationStatus: 'COMPONENT NOT VERIFIED',
+            component: null,
+            componentID: id,
+            idFormat: {
+              valid: idFormat.valid,
+              status: idFormat.status,
+              message: idFormat.message,
+            },
+            typeConfiguration: null,
+            typeConfigurationStatus: 'NOT_FOUND',
+            currentHolder: null,
+            provenanceAvailable: false,
+            provenanceEventCount: 0,
+            provenanceStatus: 'PROVENANCE UNAVAILABLE',
+            provenanceCondition: 'UNAVAILABLE',
+          }));
+        }
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    // ── Task 5: Provenance consistency validation ────────────────────────
+    if (
+      req.method === 'GET' &&
+      pathname.match(/^\/api\/components\/[^/]+\/provenance\/validate$/)
+    ) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+
+      const match = pathname.match(
+        /^\/api\/components\/([^/]+)\/provenance\/validate$/
+      );
+      const id = decodeURIComponent(match[1]);
+
+      try {
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          getFabricReadIdentity(session)
+        );
+
+        const rawHistory = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(rawHistory);
+        const validation = validateProvenance(normalizedHistory);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          componentID: id,
+          ...validation,
+        }));
+      } catch (err) {
+        const msg = cleanFabricError(err);
+
+        if (msg.includes('not found')) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            error: 'Component not found: ' + id,
+          }));
+        }
+
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: msg,
+        }));
+      }
+    }
+
+    // ── 5. GET /api/components/:id - Get Component ─────────────────────
+    if (req.method === 'GET' && pathname.startsWith('/api/components/')) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+      const parts = pathname.split('/');
+      if (parts.length === 4 && parts[3] !== 'overview') {
+        const id = decodeURIComponent(parts[3]);
+        try {
+          const result = await getComponentFromLedger(id, identity);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify(toOperationalComponentView(result)));
+        } catch (err) {
+          const msg = cleanFabricError(err);
+          const code = (msg.includes('not found') || msg.includes('does not exist')) ? 404 : 500;
+          res.writeHead(code, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: msg }));
+        }
+      }
+    }
+
+    // ── 6. Day 2 Lifecycle Endpoints ─────────────────────────────────────
+    if (req.method === 'POST' && pathname.match(/^\/api\/certifier\/components\/[^\/]+\/certify$/)) {
+      if (!hasRole(session, 'CERTIFIER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Certifier role required.',
+        }));
+      }
+      const match = pathname.match(/^\/api\/certifier\/components\/([^/]+)\/certify$/);
+      const id = decodeURIComponent(match[1]);
+      const body = await parseJsonBody(req);
+      const certificateID = `CERT-${id}`;
+
+      try {
+        const { output } = await invokeChaincode(
+          'CertifyComponent',
+          [
+            id,
+            certificateID,
+            body.certificationDate || new Date().toISOString().split('T')[0],
+            body.complianceReference || 'ISO-9001'
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} certified successfully`,
+          component: toOperationalComponentView(component)
+        }));
+
+      } catch (err) {
+        console.error('Certification failed:', err);
+
+        const msg = cleanFabricError(err);
+
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('already certified') ||
+          msg.includes('Invalid component status')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    if (req.method === 'POST' && pathname.match(/^\/api\/transporter\/components\/[^\/]+\/ship$/)) {
+      if (!hasRole(session, 'TRANSPORTER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Transporter role required.',
+        }));
+      }
+      const match = pathname.match(/^\/api\/transporter\/components\/([^/]+)\/ship$/);
+      const id = decodeURIComponent(match[1]);
+      const body = await parseJsonBody(req);
+
+      try {
+        const fromLocation = await getLocation(body.fromLocationId, { includeInactive: false });
+        const toLocation = await getLocation(body.toLocationId, { includeInactive: false });
+
+        if (!fromLocation || !toLocation) {
+          throw new Error('Origin and destination must be selected from active administrator-configured locations.');
+        }
+
+        if (fromLocation.id === toLocation.id) {
+          throw new Error('Origin and destination locations must be different.');
+        }
+
+        const component = await getComponentFromLedger(id, identity);
+        const { typeConfig } = await getComponentTypeFromComponentId(component.componentID);
+        const shipmentDate = body.shipmentDate || new Date().toISOString().split('T')[0];
+
+        const shipmentID = buildShipmentId({
+          componentID: component.componentID,
+          shipmentDate,
+          fromCode: fromLocation.code,
+          toCode: toLocation.code,
+        });
+
+        validateShipmentId({
+          shipmentID,
+          componentID: component.componentID,
+          shipmentDate,
+          fromCode: fromLocation.code,
+          toCode: toLocation.code,
+        });
+
+        const { output } = await invokeChaincode(
+          'ShipComponent',
+          [
+            id,
+            fromLocation.name,
+            toLocation.name,
+            shipmentID,
+            shipmentDate,
+            fromLocation.code,
+            toLocation.code,
+            fromLocation.pincode,
+            toLocation.pincode
+          ],
+          identity
+        );
+
+        let updatedComponent;
+
+        try {
+          updatedComponent = JSON.parse(output);
+        } catch {
+          updatedComponent = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: 'Component ' + id + ' shipped successfully',
+          component: toOperationalComponentView(updatedComponent),
+          shipmentID,
+          shipmentDate
+        }));
+
+      } catch (err) {
+        console.error('Shipment failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be shipped') ||
+          msg.includes('Missing required input') ||
+          msg.includes('must be selected') ||
+          msg.includes('must be different') ||
+          msg.includes('Shipment ID') ||
+          msg.includes('canonical BMS component ID') ||
+          msg.includes('component number')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+    if (req.method === 'POST' && pathname.match(/^\/api\/warehouse\/components\/[^\/]+\/receive$/)) {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
+      const match = pathname.match(/^\/api\/warehouse\/components\/([^/]+)\/receive$/);
+      const id = decodeURIComponent(match[1]);
+      const body = await parseJsonBody(req);
+
+      try {
+        const { output } = await invokeChaincode(
+          'ReceiveComponent',
+          [
+            id,
+            body.location,
+            body.receivedDate
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} received successfully`,
+          component: toOperationalComponentView(component)
+        }));
+
+      } catch (err) {
+        console.error('Receipt failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be received') ||
+          msg.includes('Missing required input')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    if (req.method === 'POST' && pathname.match(/^\/api\/warehouse\/components\/[^\/]+\/transfer$/)) {
+      if (!hasRole(session, 'WAREHOUSE')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Warehouse role required.',
+        }));
+      }
+      const match = pathname.match(/^\/api\/warehouse\/components\/([^/]+)\/transfer$/);
+      const id = decodeURIComponent(match[1]);
+      const body = await parseJsonBody(req);
+
+      try {
+        const assembler = await getActiveAssembler();
+
+        if (!assembler) {
+          throw new Error(
+            'No active assembler is configured. Ask the administrator to configure the assembler.'
+          );
+        }
+
+        const location = await getLocation(body.locationId, {
+          includeInactive: false,
+        });
+
+        if (!location) {
+          throw new Error(
+            'A valid active transfer location must be selected.'
+          );
+        }
+
+        if (!body.transferDate) {
+          throw new Error('Transfer date is required.');
+        }
+
+        const existingComponent = await getComponentFromLedger(id, identity);
+
+        if (existingComponent?.status === 'ASSEMBLED') {
+          throw new Error(
+            `Component already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
+          );
+        }
+
+        if (existingComponent?.status === 'TRANSFERRED') {
+          throw new Error(
+            `Custody has already been transferred to ${existingComponent.custodyTo || assembler.fabricIdentity}.`
+          );
+        }
+
+        const { output } = await invokeChaincode(
+          'TransferCustody',
+          [
+            id,
+            assembler.fabricIdentity,
+            location.name,
+            body.transferDate
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} custody transferred successfully`,
+          component: toOperationalComponentView(component)
+        }));
+
+      } catch (err) {
+        console.error('Custody transfer failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (msg.includes('Unauthorized role')) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be transferred') ||
+          msg.includes('Missing required input') ||
+          msg.includes('must be selected') ||
+          msg.includes('Transfer date') ||
+          msg.includes('No active assembler')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    if (req.method === 'POST' && pathname.match(/^\/api\/assembler\/components\/[^\/]+\/assemble$/)) {
+      if (!hasRole(session, 'ASSEMBLER')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Assembler role required.',
+        }));
+      }
+      const match = pathname.match(/^\/api\/assembler\/components\/([^/]+)\/assemble$/);
+      const id = decodeURIComponent(match[1]);
+      const body = await parseJsonBody(req);
+
+      try {
+        const location = await getLocation(body.locationId, {
+          includeInactive: false,
+        });
+
+        if (!location) {
+          throw new Error(
+            'A valid active assembly location must be selected.'
+          );
+        }
+
+        const assemblyID = buildAssemblyId(id);
+        const existingComponent = await getComponentFromLedger(id, identity);
+
+        if (existingComponent?.status === 'ASSEMBLED') {
+          throw new Error(
+            `Component is already assembled at ${existingComponent.assemblyLocation || existingComponent.location || 'the recorded assembly location'}.`
+          );
+        }
+
+        if (existingComponent?.status !== 'TRANSFERRED') {
+          throw new Error(
+            `Component cannot be assembled. Current status: ${existingComponent?.status || 'UNKNOWN'}`
+          );
+        }
+
+        if (existingComponent.custodyTo && existingComponent.custodyTo !== identity) {
+          throw new Error(
+            'Only the assembler recorded in the custody transfer can assemble this component.'
+          );
+        }
+
+        const { output } = await invokeChaincode(
+          'AssembleComponent',
+          [
+            id,
+            assemblyID,
+            location.name
+          ],
+          identity
+        );
+
+        let component;
+
+        try {
+          component = JSON.parse(output);
+        } catch {
+          component = await getComponentFromLedger(id, identity);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          success: true,
+          message: `Component ${id} assembled successfully`,
+          component: toOperationalComponentView(component)
+        }));
+
+      } catch (err) {
+        console.error('Assembly failed:', err);
+
+        const msg = cleanFabricError(err);
+        let code = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+        if (
+          msg.includes('Unauthorized role') ||
+          msg.includes('Only the assembler recorded in the custody transfer')
+        ) {
+          code = 403;
+        } else if (msg.includes('not found')) {
+          code = 404;
+        } else if (
+          msg.includes('cannot be assembled') ||
+          msg.includes('Missing required input') ||
+          msg.includes('Assembly ID') ||
+          msg.includes('must be selected')
+        ) {
+          code = 409;
+        }
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    if (req.method === 'GET' && pathname.match(/^\/api\/auditor\/components\/([^/]+)\/history$/)) {
+      if (!hasRole(session, 'AUDITOR')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Auditor role required.',
+        }));
+      }
+
+      const match = pathname.match(/^\/api\/auditor\/components\/([^/]+)\/history$/);
+      const id = decodeURIComponent(match[1]);
+
+      try {
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          identity
+        );
+        const history = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(history);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(normalizedHistory));
+      } catch (err) {
+        const msg = cleanFabricError(err);
+        const code = msg.includes('not found') ? 404 : 500;
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: msg }));
+      }
+    }
+
+    if (req.method === 'GET' && pathname.match(/\/api\/components\/[^\/]+\/history$/)) {
+      if (!hasOperationalAccess(session)) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          error: 'Operational role required.',
+        }));
+      }
+      const id = decodeURIComponent(pathname.split('/')[3]);
+
+      try {
+        const historyStr = await queryChaincode(
+          'GetComponentHistory',
+          [id],
+          identity
+        );
+        const history = JSON.parse(historyStr);
+        const normalizedHistory = normalizeProvenanceHistory(history);
+
+        // Standard operational provenance exposes lifecycle facts, not raw Fabric transaction IDs.
+        // Transaction evidence is available only through the auditor-scoped endpoint.
+        const provenanceForRole = normalizedHistory
+          .map(toOperationalProvenanceEvent)
+          .filter(Boolean);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(provenanceForRole));
+      } catch (err) {
+        const msg = cleanFabricError(err);
+
+        const code = msg.includes('not found') ? 404 : 500;
+
+        res.writeHead(code, { 'Content-Type': 'application/json' });
+
+        return res.end(JSON.stringify({
+          error: msg
+        }));
+      }
+    }
+
+    // 404 Route handler
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Endpoint not found' }));
+
+  } catch (err) {
+    console.error('Unhandled request error:', err);
+
+    if (res.headersSent) {
+      return;
+    }
+
+    const statusCode = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: statusCode >= 500 ? 'Internal server error' : err.message }));
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`\n==================================================`);
+  console.log(` Provenance Backend API running on ${HOST}:${PORT}`);
+  console.log(` Health endpoint: http://localhost:${PORT}/api/health`);
+  console.log(` Fabric health check: http://localhost:${PORT}/api/health/fabric`);
+  console.log(`==================================================\n`);
+});
