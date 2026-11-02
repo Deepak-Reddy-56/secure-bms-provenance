@@ -1,0 +1,361 @@
+import { useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useProvenanceHistory } from '../hooks/useLifecycleAction';
+import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
+import { validateComponentProvenance } from '../services/componentService';
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch { return iso; }
+}
+
+const EVENT_ICONS: Record<string, string> = {
+  MANUFACTURED: 'M', CERTIFIED: '✓', SHIPPED: '→',
+  RECEIVED: '↓', TRANSFERRED: '⇄', ASSEMBLED: '⚙',
+};
+
+function EventCard({ event }: { event: ProvenanceEvent }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const fields: { label: string; value: string }[] = [];
+
+  if (event.eventType === 'MANUFACTURED') {
+    fields.push({ label: 'Manufacturer', value: (event as any).manufacturer });
+    fields.push({ label: 'Location',     value: (event as any).location });
+  } else if (event.eventType === 'CERTIFIED') {
+    fields.push({ label: 'Actor',       value: (event as any).actor });
+    fields.push({ label: 'Certificate', value: (event as any).certificateID });
+    fields.push({ label: 'Compliance',  value: (event as any).complianceReference });
+    fields.push({ label: 'Date',        value: formatDate((event as any).certificationDate) });
+  } else if (event.eventType === 'SHIPPED') {
+    fields.push({ label: 'Transporter', value: (event as any).transporter });
+    fields.push({ label: 'Shipment ID', value: (event as any).shipmentID });
+    fields.push({
+      label: 'From',
+      value: (event as any).fromCode
+        ? `${(event as any).from} (${(event as any).fromCode})`
+        : (event as any).from,
+    });
+    fields.push({
+      label: 'To',
+      value: (event as any).toCode
+        ? `${(event as any).to} (${(event as any).toCode})`
+        : (event as any).to,
+    });
+    if ((event as any).fromPincode) {
+      fields.push({ label: 'From Pincode', value: (event as any).fromPincode });
+    }
+    if ((event as any).toPincode) {
+      fields.push({ label: 'To Pincode', value: (event as any).toPincode });
+    }
+    fields.push({
+      label: 'Shipment Date',
+      value: formatDate((event as any).shipmentDate),
+    });
+  } else if (event.eventType === 'RECEIVED') {
+    fields.push({ label: 'Warehouse',   value: (event as any).warehouse });
+    fields.push({ label: 'Location',    value: (event as any).location });
+    fields.push({ label: 'Date',        value: formatDate((event as any).receivedDate) });
+  } else if (event.eventType === 'TRANSFERRED') {
+    fields.push({ label: 'From',     value: (event as any).from });
+    fields.push({ label: 'To',       value: (event as any).to });
+    fields.push({ label: 'Location', value: (event as any).location });
+  } else if (event.eventType === 'ASSEMBLED') {
+    fields.push({ label: 'Assembler',   value: (event as any).actor || (event as any).assembler });
+    fields.push({ label: 'Assembly ID', value: (event as any).assemblyID });
+    fields.push({ label: 'Location',    value: (event as any).location });
+  }
+
+  return (
+    <div
+      className={`prov-event${expanded ? ' expanded' : ''}`}
+      onClick={() => setExpanded(e => !e)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpanded(x => !x); }}
+      aria-expanded={expanded}
+      aria-label={`${event.eventType} event on ${formatDate(event.timestamp)}`}
+    >
+      <div className={`prov-event-dot ${event.eventType}`} aria-hidden="true">
+        {EVENT_ICONS[event.eventType] ?? '·'}
+      </div>
+      <div className="prov-event-content">
+        <div className="prov-event-header">
+          <span className={`prov-event-type ${event.eventType}`}>{event.eventType}</span>
+          <span className="prov-event-date">{formatDate(event.timestamp)}</span>
+        </div>
+        {fields.length > 0 && (
+          <div className="prov-event-fields">
+            {fields.slice(0, expanded ? fields.length : Math.min(2, fields.length)).map(f => (
+              <div key={f.label}>
+                <div className="prov-event-field-label">{f.label}</div>
+                <div className="prov-event-field-value">{f.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: 'var(--space-2)', fontSize: 10, color: 'var(--text-placeholder)' }}>
+          {expanded ? 'Click to collapse' : 'Click to expand'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ProvenancePageProps {
+  initialComponentID?: string;
+}
+
+export function ProvenancePage({ initialComponentID = '' }: ProvenancePageProps) {
+  const { role } = useAuth();
+  const [searchInput, setSearchInput] = useState(initialComponentID);
+  const [loadedID,    setLoadedID]    = useState('');
+  const [validation, setValidation] = useState<ProvenanceValidationResult | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  const history = useProvenanceHistory(
+    role === 'AUDITOR' ? '/api/auditor/components' : '/api/components'
+  );
+
+  useEffect(() => {
+    const componentID = initialComponentID.trim();
+
+    if (!componentID) {
+      return;
+    }
+
+    setSearchInput(componentID);
+    setLoadedID(componentID);
+    setValidation(null);
+    setValidationError('');
+    setValidationLoading(false);
+    void history.fetch(componentID);
+  }, [initialComponentID, history.fetch]);
+
+  const handleLoad = () => {
+    if (!searchInput.trim()) return;
+    setLoadedID(searchInput.trim());
+    setValidation(null);
+    setValidationError('');
+    history.fetch(searchInput.trim());
+  };
+
+  const handleValidate = async () => {
+    if (!loadedID || history.events.length === 0) return;
+
+    setValidationLoading(true);
+    setValidationError('');
+
+    try {
+      setValidation(await validateComponentProvenance(loadedID));
+    } catch (err) {
+      setValidationError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to validate provenance.'
+      );
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-heading">
+        <h1>Provenance History</h1>
+        <p>Full audit trail of a component's blockchain-recorded lifecycle events.</p>
+      </div>
+
+      {/* Search */}
+      <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', marginBottom: 'var(--space-8)' }}>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label className="form-label" htmlFor="prov-search">Component ID</label>
+          <input id="prov-search" type="text" className="form-input mono"
+            value={searchInput} onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleLoad(); }}
+            placeholder="e.g. BMS-2026-001" />
+        </div>
+        <button className="btn btn-primary" style={{ height: 40, marginTop: 20 }}
+          disabled={!searchInput.trim() || history.loading}
+          onClick={handleLoad} id="btn-load-provenance">
+          {history.loading ? <><span className="spinner spinner-sm spinner-white" /> Loading…</> : 'Load History'}
+        </button>
+        {history.events.length > 0 && (
+          <button className="btn btn-ghost" style={{ height: 40, marginTop: 20 }} onClick={history.clear}>Clear</button>
+        )}
+      </div>
+
+      {/* Provenance consistency validation */}
+      {loadedID && history.events.length > 0 && (
+        <div className="panel" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="panel-header">
+            <div>
+              <span className="panel-title">Provenance Consistency</span>
+              <div style={{
+                marginTop: 'var(--space-1)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--text-secondary)',
+              }}>
+                Validate lifecycle order and required provenance data against the Fabric history.
+              </div>
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => void handleValidate()}
+              disabled={validationLoading}
+              id="btn-validate-provenance"
+            >
+              {validationLoading ? 'Validating…' : 'Validate Provenance'}
+            </button>
+          </div>
+
+          {validationError && (
+            <div className="panel-body">
+              <div className="alert alert-error" role="alert">
+                <span className="alert-icon">✕</span>
+                <div className="alert-body">
+                  <div className="alert-title">Validation Failed</div>
+                  <div className="alert-message">{validationError}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {validation && (
+            <div className="panel-body">
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 'var(--space-3)',
+                marginBottom: 'var(--space-4)',
+              }}>
+                <div className="kpi-card">
+                  <span className="kpi-label">Result</span>
+                  <span className="kpi-value">{validation.status}</span>
+                  <span className="kpi-sub">{validation.message}</span>
+                </div>
+                <div className="kpi-card">
+                  <span className="kpi-label">Lifecycle Sequence</span>
+                  <span className="kpi-value">
+                    {validation.checks.sequenceValid ? 'Valid' : 'Invalid'}
+                  </span>
+                  <span className="kpi-sub">
+                    {validation.actualSequence.join(' → ') || 'No events'}
+                  </span>
+                </div>
+                <div className="kpi-card">
+                  <span className="kpi-label">Required Events</span>
+                  <span className="kpi-value">
+                    {validation.checks.requiredEventsPresent ? 'Complete' : 'Incomplete'}
+                  </span>
+                  <span className="kpi-sub">
+                    {validation.completedStages} / {validation.expectedSequence.length} stages present
+                  </span>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 'var(--space-2)',
+              }}>
+                {[
+                  ['Actor data', validation.checks.actorDataComplete],
+                  ['Timestamps', validation.checks.timestampsValid],
+                  ['Locations', validation.checks.locationsComplete],
+                ].map(([label, valid]) => (
+                  <div
+                    key={String(label)}
+                    style={{
+                      padding: 'var(--space-3)',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-ui)',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    <strong>{String(valid ? '✓ ' : '✕ ') + String(label)}</strong>
+                  </div>
+                ))}
+              </div>
+
+              {!validation.valid && validation.warning && (
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                  <div className="alert alert-warning" role="alert">
+                    <span className="alert-icon">!</span>
+                    <div className="alert-body">
+                      <div className="alert-title">{validation.warning.title}</div>
+                      <div className="alert-message">{validation.warning.message}</div>
+                      {validation.issues.length > 0 && (
+                        <ul style={{ margin: 'var(--space-3) 0 0', paddingLeft: 'var(--space-5)' }}>
+                          {validation.issues.map((issue, index) => (
+                            <li key={index} style={{ marginBottom: 'var(--space-1)' }}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timeline panel */}
+      <div className="panel">
+        {loadedID && (
+          <div className="panel-header">
+            <span className="panel-title">Provenance — {loadedID}</span>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+              {history.events.length > 0
+                ? `${history.events.length} event${history.events.length === 1 ? '' : 's'}`
+                : ''}
+            </span>
+          </div>
+        )}
+
+        <div className="panel-body">
+          {history.loading && (
+            <div className="loading-row" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              Querying provenance ledger…
+            </div>
+          )}
+
+          {history.errorMessage && (
+            <div className="alert alert-error" role="alert">
+              <span className="alert-icon">✕</span>
+              <div className="alert-body">
+                <div className="alert-title">Failed to Load History</div>
+                <div className="alert-message">{history.errorMessage}</div>
+              </div>
+            </div>
+          )}
+
+          {!history.loading && !history.errorMessage && history.events.length === 0 && !loadedID && (
+            <div className="empty-state">
+              <p className="empty-state-title">No component loaded</p>
+              <p className="empty-state-desc">Enter a component ID above to load its provenance trail from the Fabric ledger.</p>
+            </div>
+          )}
+
+          {!history.loading && !history.errorMessage && history.events.length === 0 && loadedID && (
+            <div className="empty-state">
+              <p className="empty-state-title">No provenance events</p>
+              <p className="empty-state-desc">No events have been recorded for {loadedID}.</p>
+            </div>
+          )}
+
+          {history.events.length > 0 && (
+            <div className="prov-timeline" aria-label="Provenance timeline">
+              {history.events.map((event, idx) => (
+                <EventCard key={`${event.eventType}-${idx}`} event={event} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

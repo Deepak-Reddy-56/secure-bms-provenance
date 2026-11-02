@@ -1,0 +1,149 @@
+/* Component Registration form */
+
+.registration-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.registration-card-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.registration-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-blue-dim);
+  border: 1px solid var(--color-blue);
+  color: var(--color-blue-light);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.registration-card-body {
+  padding: var(--space-6);
+}
+
+.registration-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.registration-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.registration-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.registration-submit-row {
+  padding-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.registration-result {
+  margin-top: var(--space-4);
+}
+
+/* Success panel */
+.success-panel {
+  background-color: var(--color-green-bg);
+  border: 1px solid var(--color-green);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.success-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.success-panel-icon {
+  font-size: var(--text-xl);
+  color: var(--color-green-light);
+}
+
+.success-panel-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--color-green-light);
+}
+
+.success-panel-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: #8ee0a1;
+}
+
+.success-panel-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-green-dim);
+  padding-top: var(--space-4);
+}
+
+.success-meta-item {}
+
+.success-meta-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-green);
+  margin-bottom: 2px;
+}
+
+.success-meta-value {
+  font-size: var(--text-sm);
+  color: #c3f0cb;
+  font-weight: 500;
+}
+
+.success-meta-value.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Reset link */
+.register-another-btn {
+  margin-top: var(--space-4);
+  background: transparent;
+  border: 1px solid var(--color-green);
+  color: var(--color-green-light);
+  font-size: var(--text-sm);
+}
+
+.register-another-btn:not(:disabled):hover {
+  background-color: var(--color-green-dim);
+}
+
+@media (max-width: 768px) {
+  .registration-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .registration-form-grid .full-width {
+    grid-column: 1;
+  }
+  .success-panel-meta {
+    grid-template-columns: 1fr;
+  }
+}

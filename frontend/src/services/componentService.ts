@@ -1,0 +1,223 @@
+import { api } from './api';
+import type {
+  Component,
+  RegisterComponentPayload,
+  CertifyComponentPayload,
+  ShipComponentPayload,
+  ReceiveComponentPayload,
+  TransferCustodyPayload,
+  AssembleComponentPayload,
+  LifecycleActionResult,
+  ComponentVerificationResult,
+} from '../types/component';
+import type { ProvenanceEvent, ProvenanceValidationResult } from '../types/provenance';
+
+// ── Day 1 operations ──────────────────────────────────────────
+
+/**
+ * Register a new component on the Hyperledger Fabric ledger.
+ * Calls POST /api/manufacturer/components
+ */
+export async function registerComponent(
+  payload: RegisterComponentPayload,
+  signal?: AbortSignal
+): Promise<Component> {
+  return api.post<Component>('/api/manufacturer/components', payload, signal);
+}
+
+/**
+ * Retrieve a component from the Hyperledger Fabric ledger by ID.
+ * Calls GET /api/components/:componentID
+ */
+export async function getComponent(
+  componentID: string,
+  signal?: AbortSignal
+): Promise<Component> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<Component>(`/api/components/${encoded}`, signal);
+}
+
+/**
+ * Verify a component against the Fabric ledger and the configured ID format.
+ * Calls GET /api/components/:componentID/verify
+ */
+export async function verifyComponent(
+  componentID: string,
+  signal?: AbortSignal
+): Promise<ComponentVerificationResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<ComponentVerificationResult>(
+    `/api/components/${encoded}/verify`,
+    signal
+  );
+}
+
+// ── Day 2 lifecycle operations ────────────────────────────────
+
+/**
+ * Certify a component. Calls POST /api/certifier/components/:id/certify
+ */
+export async function certifyComponent(
+  componentID: string,
+  payload: CertifyComponentPayload,
+  signal?: AbortSignal
+): Promise<LifecycleActionResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.post<LifecycleActionResult>(
+    `/api/certifier/components/${encoded}/certify`,
+    payload,
+    signal
+  );
+}
+
+/**
+ * Ship a component. Calls POST /api/transporter/components/:id/ship
+ */
+export async function shipComponent(
+  componentID: string,
+  payload: ShipComponentPayload,
+  signal?: AbortSignal
+): Promise<LifecycleActionResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.post<LifecycleActionResult>(
+    `/api/transporter/components/${encoded}/ship`,
+    payload,
+    signal
+  );
+}
+
+/**
+ * Receive a component. Calls POST /api/warehouse/components/:id/receive
+ */
+export async function receiveComponent(
+  componentID: string,
+  payload: ReceiveComponentPayload,
+  signal?: AbortSignal
+): Promise<LifecycleActionResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.post<LifecycleActionResult>(
+    `/api/warehouse/components/${encoded}/receive`,
+    payload,
+    signal
+  );
+}
+
+export interface OperationalAssembler {
+  name: string;
+}
+
+export async function getActiveAssembler(
+  signal?: AbortSignal
+): Promise<OperationalAssembler | null> {
+  const response = await api.get<{ assembler: OperationalAssembler | null }>(
+    '/api/warehouse/assembler',
+    signal
+  );
+
+  return response.assembler;
+}
+
+/**
+ * Transfer custody. Calls POST /api/warehouse/components/:id/transfer
+ */
+export async function transferCustody(
+  componentID: string,
+  payload: TransferCustodyPayload,
+  signal?: AbortSignal
+): Promise<LifecycleActionResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.post<LifecycleActionResult>(
+    `/api/warehouse/components/${encoded}/transfer`,
+    payload,
+    signal
+  );
+}
+
+/**
+ * Assemble a component. Calls POST /api/assembler/components/:id/assemble
+ */
+export async function assembleComponent(
+  componentID: string,
+  payload: AssembleComponentPayload,
+  signal?: AbortSignal
+): Promise<LifecycleActionResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.post<LifecycleActionResult>(
+    `/api/assembler/components/${encoded}/assemble`,
+    payload,
+    signal
+  );
+}
+
+/**
+ * Retrieve complete provenance history. Calls GET /api/components/:id/history
+ */
+export async function getComponentHistory(
+  componentID: string,
+  signal?: AbortSignal,
+  routeBase = '/api/components'
+): Promise<ProvenanceEvent[]> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<ProvenanceEvent[]>(
+    `${routeBase}/${encoded}/history`,
+    signal
+  );
+}
+
+/**
+ * Validate the component provenance sequence and required history data.
+ * Calls GET /api/components/:componentID/provenance/validate
+ */
+export async function validateComponentProvenance(
+  componentID: string,
+  signal?: AbortSignal
+): Promise<ProvenanceValidationResult> {
+  const encoded = encodeURIComponent(componentID.trim());
+  return api.get<ProvenanceValidationResult>(
+    `/api/components/${encoded}/provenance/validate`,
+    signal
+  );
+}
+
+// ── Utility operations ────────────────────────────────────────
+
+/**
+ * Fetch aggregate system overview. Gracefully returns null if endpoint missing.
+ */
+export async function getSystemOverview(
+  signal?: AbortSignal
+): Promise<{ registeredCount: number } | null> {
+  try {
+    return await api.get<{ registeredCount: number }>(
+      '/api/overview',
+      signal
+    );
+  } catch {
+    return null;
+  }
+}
+
+import type { FabricHealthResult } from '../types/component';
+
+/**
+ * Check the backend/Fabric network health via GET /api/health/fabric.
+ */
+export async function checkFabricHealth(signal?: AbortSignal): Promise<FabricHealthResult> {
+  try {
+    return await api.get<FabricHealthResult>('/api/health/fabric', signal);
+  } catch (err) {
+    return {
+      connected: false,
+      error: err instanceof Error ? err.message : 'Unable to connect to provenance backend service',
+    };
+  }
+}
+
+/**
+ * Legacy boolean check.
+ */
+export async function checkNetworkHealth(signal?: AbortSignal): Promise<boolean> {
+  const result = await checkFabricHealth(signal);
+  return result.connected;
+}
+
