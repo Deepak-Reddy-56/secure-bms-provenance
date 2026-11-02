@@ -5,15 +5,20 @@ A role-based component lifecycle and provenance application built with React, No
 The application records a component's lifecycle on a permissioned Fabric ledger and provides role-specific workflows for the manufacturer, certifier, transporter, warehouse, assembler and auditor.
 
 ## Contributed By
-Deepak Reddy - 2460356
-Richa Felix - 2460431
-Nevin John Alex - 2460414
-Karthick Raja K - 2460388
-Daniel J - 2462510 
+- Deepak Reddy - 2460356
+  
+- Richa Felix - 2460431
+
+- Nevin John Alex - 2460414
+
+- Karthick Raja K - 2460388
+
+- Daniel J - 2462510 
 
 ## Under The Guidance Of 
-Dr. Jenefa J - jenefa.j@christuniversity.in
-Dr. Gokula Priya - r.gokulapriya@christuniversity.in
+- Dr. Jenefa J - jenefa.j@christuniversity.in
+  
+- Dr. Gokula Priya - r.gokulapriya@christuniversity.in
 
 ## Contents
 
